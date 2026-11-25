@@ -4,8 +4,9 @@ The cover was generated with the built-in OpenAI imagegen tool, using the
 actual exported light/dark settings images and the original corner icon as
 references. It is promotional artwork, not a raw screenshot.
 
-The GitHub Social preview is a separate 1280×640 PNG, composed deterministically
-from the original icon and native UI captures by `scripts/brand-assets.ps1`.
+The GitHub Social preview is a 1280×640 JPEG of this same approved poster,
+exported at high quality by `scripts/brand-assets.ps1`. The README cover and
+shared link cards therefore show the same design.
 The supplied SF Pro files were available locally during typography rendering;
 no font files are part of the published assets.
 
