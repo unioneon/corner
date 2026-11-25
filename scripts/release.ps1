@@ -34,6 +34,6 @@ if($LASTEXITCODE){throw 'Installer compilation failed.'}
 $source=Join-Path $dist "corner-$Version-Source.zip"
 & git -C $root archive --format=zip --output=$source HEAD
 if($LASTEXITCODE){throw 'Source archive failed. Commit the prepared source before packaging.'}
-$lines=Get-ChildItem -LiteralPath $dist -File|Where-Object {$_.Name -match '\.(exe|zip)$'}|Sort-Object Name|ForEach-Object {'{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name}
+$lines=Get-ChildItem -LiteralPath $dist -File|Where-Object {$_.Name.StartsWith("corner-$Version-") -and $_.Name -match '\.(exe|zip)$'}|Sort-Object Name|ForEach-Object {'{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(),$_.Name}
 $lines|Set-Content -LiteralPath (Join-Path $dist 'SHA256SUMS.txt') -Encoding ASCII
 Get-ChildItem -LiteralPath $dist -File|Select-Object Name,Length

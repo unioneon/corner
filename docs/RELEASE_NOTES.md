@@ -1,4 +1,12 @@
-# corner 1.2.0
+# corner 1.2.1
+
+- Corners now remain visible in browser fullscreen, including YouTube, by default.
+- Added **Fullscreen → Show corners / Hide corners** to the logo menu.
+- Fullscreen preference participates in live preview, Apply and rollback.
+- Foreground fullscreen windows are included in event-driven overlay ordering.
+- Corrected the compiler path used by the Windows GitHub Actions build.
+
+## Included from 1.2.0
 
 The first public release of corner for Windows 10 / 11 x64.
 
@@ -7,7 +15,7 @@ The first public release of corner for Windows 10 / 11 x64.
 - Smooth light/dark settings window, English tray menu and original corner icons.
 - Black/white masks and system/light/dark appearance.
 - Per-user sign-in task, event-driven rendering and renderer recovery.
-- Click-through masks, best-effort capture exclusion and fullscreen hiding.
+- Click-through masks, best-effort capture exclusion and optional fullscreen hiding.
 - Optional isolated desktop pinning with an ordinary-overlay fallback.
 
 No Apple font files, personal preferences or machine diagnostics are included.

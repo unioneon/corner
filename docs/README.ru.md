@@ -3,8 +3,8 @@
 **Плавные углы для рабочего стола Windows.** Верх и низ настраиваются отдельно,
 результат виден сразу, а после закрытия настроек утилита остаётся в трее.
 
-[Скачать установщик](https://github.com/unioneon/corner/releases/download/v1.2.0/corner-1.2.0-Setup-x64.exe) ·
-[Portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.0/corner-1.2.0-Portable-x64.zip) ·
+[Скачать установщик](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Setup-x64.exe) ·
+[Portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Portable-x64.zip) ·
 [English](../README.md)
 
 ![corner в тёмной теме](images/settings-dark.png)
@@ -17,8 +17,8 @@
 - Нажатие на логотип открывает выбор чёрного/белого цвета углов и темы.
 - Меню трея: **Settings**, **Disable / Enable**, **Exit**.
 
-Windows 10 2004+ или Windows 11, x64. Маски пропускают клики и скрываются при
-обнаружении полноэкранного окна. Форма приближённая; совпадение с контуром
+Windows 10 2004+ или Windows 11, x64. Маски пропускают клики. В полном экране углы остаются видны по умолчанию;
+поведение выбирается через логотип → Fullscreen → Show / Hide corners. Форма приближённая; совпадение с контуром
 Apple не заявляется. Исключение из записи зависит от способа захвата Windows.
 Поведение в анимациях виртуальных столов может различаться по версии ОС.
 

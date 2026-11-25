@@ -119,7 +119,7 @@ namespace CornerUI {
     }
     static void updated(bool preview=false) {
         normalize(draft);
-        bool effectChanged=!displayedValid||displayed.enabled!=draft.enabled||displayed.top!=draft.top||displayed.bottom!=draft.bottom||displayed.up!=draft.up||displayed.down!=draft.down||displayed.white!=draft.white;
+        bool effectChanged=!displayedValid||displayed.enabled!=draft.enabled||displayed.top!=draft.top||displayed.bottom!=draft.bottom||displayed.up!=draft.up||displayed.down!=draft.down||displayed.white!=draft.white||displayed.hideFullscreen!=draft.hideFullscreen;
         bool applyEnabled=dirty();if(bool(IsWindowEnabled(item(Apply)))!=applyEnabled)EnableWindow(item(Apply),applyEnabled);
         bool themeChanged=refreshTheme();
         auto invalidate=[](int id){InvalidateRect(item(id),nullptr,FALSE);};
@@ -156,14 +156,17 @@ namespace CornerUI {
         previewSent=false;applied=draft;updated();return true;
     }
     static void appearanceMenu(POINT point) {
-        HMENU menu=CreatePopupMenu();HMENU colors=CreatePopupMenu(),themes=CreatePopupMenu();
+        HMENU menu=CreatePopupMenu();HMENU colors=CreatePopupMenu(),themes=CreatePopupMenu(),fullscreen=CreatePopupMenu();
         AppendMenuW(colors,MF_STRING|(!draft.white?MF_CHECKED:0),10,L"Black");AppendMenuW(colors,MF_STRING|(draft.white?MF_CHECKED:0),11,L"White");
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(colors),L"Corner color");
         const wchar_t* names[]={L"System",L"Light",L"Dark"};for(int i=0;i<3;i++)AppendMenuW(themes,MF_STRING|(draft.theme==i?MF_CHECKED:0),20+i,names[i]);
         AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(themes),L"Appearance");
+        AppendMenuW(fullscreen,MF_STRING|(!draft.hideFullscreen?MF_CHECKED:0),30,L"Show corners");AppendMenuW(fullscreen,MF_STRING|(draft.hideFullscreen?MF_CHECKED:0),31,L"Hide corners");
+        AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(fullscreen),L"Fullscreen");
         UINT choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
         if(choice==10||choice==11)draft.white=choice==11;
         if(choice>=20&&choice<=22)draft.theme=choice-20;
+        if(choice==30||choice==31)draft.hideFullscreen=choice==31;
         updated(true);
     }
     static LRESULT CALLBACK noErase(HWND w,UINT msg,WPARAM a,LPARAM b,UINT_PTR,DWORD_PTR) {
@@ -190,7 +193,7 @@ namespace CornerUI {
         add(L"BUTTON",L"Apply",Apply,BS_OWNERDRAW,506,74,89,37);
         add(L"BUTTON",L"OK",OK,BS_OWNERDRAW,609,74,89,37);
         HWND tooltip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,window,nullptr,GetModuleHandleW(nullptr),nullptr);
-        TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.uFlags=TTF_IDISHWND|TTF_SUBCLASS;tool.hwnd=window;tool.uId=reinterpret_cast<UINT_PTR>(item(Logo));tool.lpszText=const_cast<wchar_t*>(L"Corner color · Light / Dark theme");SendMessageW(tooltip,TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
+        TOOLINFOW tool{};tool.cbSize=sizeof(tool);tool.uFlags=TTF_IDISHWND|TTF_SUBCLASS;tool.hwnd=window;tool.uId=reinterpret_cast<UINT_PTR>(item(Logo));tool.lpszText=const_cast<wchar_t*>(L"Color, appearance and fullscreen");SendMessageW(tooltip,TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
         updated();
     }
     static void paintButton(DRAWITEMSTRUCT* draw,HDC dc) {

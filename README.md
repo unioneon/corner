@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/unioneon/corner/releases/download/v1.2.0/corner-1.2.0-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
   &nbsp;
-  <a href="https://github.com/unioneon/corner/releases/download/v1.2.0/corner-1.2.0-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
 </p>
 
 <p align="center">
@@ -54,8 +54,8 @@ artwork based on those captures. [Artwork details](docs/design/POSTER.md).*
 
 ## Get started
 
-1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.2.0/corner-1.2.0-Setup-x64.exe),
-   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.0/corner-1.2.0-Portable-x64.zip)
+1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Setup-x64.exe),
+   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Portable-x64.zip)
    and run `corner.exe`.
 2. Click the tray icon and choose **Settings**. The desktop and Start menu
    shortcuts open the same window.
@@ -76,8 +76,9 @@ preference.
   the first active display. Advanced users can pass `-Panel` to `manage.ps1 install`.
 - **Sizing:** 100% corresponds to a 256-pixel corner extent. Percentages are
   independent for the top and bottom, and are measured in physical pixels.
-- **Fullscreen:** masks hide when the foreground borderless window covers the
-  selected display. This is a geometry heuristic; unusual apps may behave differently.
+- **Fullscreen:** corners remain visible in browser video and normal borderless
+  fullscreen by default. Click the logo → **Fullscreen → Show corners / Hide corners**
+  to choose the behavior. Exclusive fullscreen games may bypass ordinary overlays.
 - **Screen capture:** exclusion depends on the Windows capture path. It is
   best-effort, not a guarantee for every recorder, driver or sharing program.
 - **Virtual desktops:** experimental pinning uses an optional private COM

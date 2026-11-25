@@ -42,6 +42,7 @@ struct State {
     LONG layerRepairs=0;
     DWORD up=0,down=0,startup=1,theme=0;
     DWORD preview=0;
+    DWORD hideFullscreen=0;
 };
 static State* state=nullptr;
 static HWND controller=nullptr, corners[4]{};
@@ -171,6 +172,7 @@ static void rebuildRoundedMasks() {
 static void updateStateSettings() {
     state->cornerSize=rounded?cornerSize:0;state->enabled=settings.enabled;state->top=settings.top;state->bottom=settings.bottom;state->white=settings.white;
     state->up=settings.up;state->down=settings.down;state->startup=settings.startup;state->theme=settings.theme;
+    state->hideFullscreen=settings.hideFullscreen;
 }
 static void applyLiveSettings(Settings incoming,bool preview) {
     normalize(incoming);
@@ -233,12 +235,13 @@ static bool isTaskbar(HWND w) {
     return !wcscmp(cls,L"Shell_TrayWnd")||!wcscmp(cls,L"Shell_SecondaryTrayWnd");
 }
 static bool shellCoversCorners() {
+    HWND foreground=GetForegroundWindow();bool protectFullscreen=!settings.hideFullscreen&&fullscreen(foreground);
     for(int i=0;i<cornerCount;i++) {
         HWND corner=corners[i];if(!corner||!IsWindowVisible(corner))continue;
         RECT bounds{};GetWindowRect(corner,&bounds);
         int limit=1024;
         for(HWND above=GetWindow(corner,GW_HWNDPREV);above&&limit--;above=GetWindow(above,GW_HWNDPREV)) {
-            if(!isTaskbar(above)||!IsWindowVisible(above))continue;
+            if((!isTaskbar(above)&&!(protectFullscreen&&above==foreground))||!IsWindowVisible(above))continue;
             RECT shell{},intersection{};GetWindowRect(above,&shell);
             if(IntersectRect(&intersection,&bounds,&shell))return true;
         }
@@ -256,7 +259,7 @@ static void restoreLayerOrder() {
 static void refresh(bool topology=false,bool redraw=false) {
     if(topology) {try{panelPresent=locate();}catch(...){panelPresent=false;}}
     if((topology||redraw)&&panelPresent){for(int i=0;i<cornerCount;i++)render(i);}
-    bool show=panelPresent&&settings.enabled&&!fullscreen(GetForegroundWindow());
+    bool show=panelPresent&&settings.enabled&&(!settings.hideFullscreen||!fullscreen(GetForegroundWindow()));
     bool any=show&&(settings.bottom||(cornerCount>2&&settings.top));
     if(any!=bool(state->visible)||topology||redraw) {
         for(int i=0;i<cornerCount;i++) if(HWND w=corners[i]) {
@@ -394,7 +397,7 @@ static int run(int argc,wchar_t** argv) {
           ",\"events\":"+std::to_string(s.events)+",\"renders\":"+std::to_string(s.renders)+",\"visibilityChanges\":"+std::to_string(s.changes)+
           ",\"approximateRounded\":"+std::to_string(s.rounded)+",\"cornerSize\":"+std::to_string(s.cornerSize)+",\"corners\":"+std::to_string(s.rounded?4:2)+
           ",\"enabled\":"+std::to_string(s.enabled)+",\"topEnabled\":"+std::to_string(s.top)+",\"bottomEnabled\":"+std::to_string(s.bottom)+",\"color\":\""+(s.white?"white":"black")+"\",\"layerRepairs\":"+std::to_string(s.layerRepairs)+
-          ",\"upPercent\":"+std::to_string(s.up)+",\"downPercent\":"+std::to_string(s.down)+",\"startup\":"+std::to_string(s.startup)+",\"theme\":"+std::to_string(s.theme)+",\"preview\":"+std::to_string(s.preview)+"}\n");return 0;
+          ",\"upPercent\":"+std::to_string(s.up)+",\"downPercent\":"+std::to_string(s.down)+",\"startup\":"+std::to_string(s.startup)+",\"theme\":"+std::to_string(s.theme)+",\"preview\":"+std::to_string(s.preview)+",\"hideFullscreen\":"+std::to_string(s.hideFullscreen)+"}\n");return 0;
     }
     if(operation==L"--self-test") {
         Mask m{3,2,{0,17,255,128,42,0}};auto b=pixels(m,false),d=pixels(m,true);
@@ -402,11 +405,11 @@ static int run(int argc,wchar_t** argv) {
         if(cmdQuote(L"a b\\")!=L"\"a b\\\\\"")throw std::runtime_error("Command quoting failed");
         wchar_t tempDir[MAX_PATH]{},tempFile[MAX_PATH]{};
         if(!GetTempPathW(MAX_PATH,tempDir)||!GetTempFileNameW(tempDir,L"gct",0,tempFile))throw std::runtime_error("Cannot create settings test file");
-        settingsFileOverride=tempFile;Settings test;test.enabled=false;test.top=false;test.white=true;test.up=23;test.down=73;test.startup=false;test.theme=2;
+        settingsFileOverride=tempFile;Settings test;test.enabled=false;test.top=false;test.white=true;test.up=23;test.down=73;test.startup=false;test.hideFullscreen=true;test.theme=2;
         if(!saveSettings(test))throw std::runtime_error("Settings save failed");
         auto restored=readSettings();
         if(!sameSettings(restored,test))throw std::runtime_error("Settings roundtrip failed");
-        test.enabled=true;test.top=true;test.bottom=true;test.white=false;test.up=0;test.down=15;test.startup=true;test.theme=1;normalize(test);
+        test.enabled=true;test.top=true;test.bottom=true;test.white=false;test.up=0;test.down=15;test.startup=true;test.hideFullscreen=false;test.theme=1;normalize(test);
         if(!saveSettings(test))throw std::runtime_error("Second settings save failed");
         restored=readSettings();
         if(!sameSettings(restored,test)||restored.top||!restored.bottom)throw std::runtime_error("Settings replacement/zero-percent failed");
