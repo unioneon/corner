@@ -19,9 +19,9 @@ argument quoting, settings round-trip/replacement, independent percentages,
 zero disabling, icon resources, and the selected font. Native UI export creates
 light/dark captures and reports the number of partly transparent outline pixels.
 
-The settings window has a supersampled, per-pixel-alpha backdrop. Its input
+Settings and the tray share a supersampled, per-pixel-alpha backdrop, with a soft shadow in the light theme. Its input
 region covers only opaque pixels, so the outer edge isn't a binary HRGN clip.
-The backdrop is click-through, follows the main window, and is destroyed with it.
+The backdrop is click-through, follows the main window, and is destroyed with it. The main window forwards show/hide/position changes to that backdrop; a regression test checks real HWND visibility and movement, not only exported alpha pixels.
 Slider changes invalidate only the changed row/percentage and use buffered
 painting. Overlay preview is passed through WM_COPYDATA; it is persisted only
 by Apply. The renderer waits for the preview owner's process and rolls back

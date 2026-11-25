@@ -14,6 +14,7 @@ try {
     if($process.ExitCode){throw 'Native UI capture failed'}
     $capture=Get-Content -LiteralPath $captureReport -Raw|ConvertFrom-Json
     if($capture.antialiasedEdgePixels -le 0){throw 'The UI contour has no antialiasing'}
+    if($capture.trayAntialiasedEdgePixels -le 0 -or !$capture.frameLifecycle -or $capture.dpiChecks -ne 4){throw 'Tray smoothing, frame lifecycle or DPI checks failed'}
     foreach($name in 'settings-light.png','settings-dark.png','tray-game-light.png','tray-game-dark.png'){if((Get-Item -LiteralPath (Join-Path $captures $name)).Length -lt 1000){throw 'Empty screenshot'}}
     [pscustomobject]@{SelfTest='pass';NativeUiCapture='pass';AntialiasedPixels=$capture.antialiasedEdgePixels;Font=$capture.font}|ConvertTo-Json
 }finally{

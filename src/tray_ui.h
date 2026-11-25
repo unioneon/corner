@@ -1,6 +1,9 @@
 namespace CornerTray {
     static HWND popup=nullptr;static UINT choice=0,dpi=96;static bool dark=false,active=false;
     static HICON icon=nullptr;static HBRUSH background=nullptr;
+    static SmoothFrame::Surface frame;
+    static void createButtons(HWND parent);
+    static void shape(HWND target);
     static float scale(){return dpi/96.0f;}
     static int px(float value){return int(std::lround(value*scale()));}
     static Gdiplus::Color face(){return dark?Gdiplus::Color(255,28,28,30):Gdiplus::Color(255,255,255,255);}
@@ -19,6 +22,17 @@ namespace CornerTray {
         drawSF(g,L"corner",{68,22,160,37},25,dark?Gdiplus::Color(255,255,255,255):Gdiplus::Color(255,0,0,0),true,false,scale());
     }
     static LRESULT CALLBACK proc(HWND w,UINT msg,WPARAM a,LPARAM b) {
+        if(msg==WM_SHOWWINDOW)frame.sync(w,a!=0);
+        if(msg==WM_WINDOWPOSCHANGED)frame.sync(w,IsWindowVisible(w)!=FALSE);
+        if(msg==WM_DESTROY)frame.release(w);
+        if(msg==WM_DPICHANGED) {
+            dpi=HIWORD(a);RECT* r=reinterpret_cast<RECT*>(b);
+            SetWindowPos(w,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE);
+            HWND child=GetWindow(w,GW_CHILD);while(child){HWND next=GetWindow(child,GW_HWNDNEXT);DestroyWindow(child);child=next;}
+            if(icon)DestroyIcon(icon);
+            icon=themedIcon(dark,px(26));
+            createButtons(w);shape(w);InvalidateRect(w,nullptr,FALSE);return 0;
+        }
         if(msg==WM_DRAWITEM){paintButton(reinterpret_cast<DRAWITEMSTRUCT*>(b));return TRUE;}
         if(msg==WM_COMMAND&&HIWORD(a)==BN_CLICKED){choice=LOWORD(a);DestroyWindow(w);return 0;}
         if(msg==WM_ACTIVATE&&LOWORD(a)==WA_INACTIVE&&IsWindowVisible(w)){DestroyWindow(w);return 0;}
@@ -37,6 +51,9 @@ namespace CornerTray {
             CreateWindowExW(0,L"BUTTON",id==1?L"Settings":(id==4?L"Game":(id==2?(settings.enabled?L"Disable":L"Enable"):L"Exit")),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,px(22),px(73+row*52),px(220),px(48),parent,reinterpret_cast<HMENU>(INT_PTR(id)),GetModuleHandleW(nullptr),nullptr);
         }
     }
+    static void shape(HWND target) {
+        frame.rebuild(target,scale(),face(),true,!dark,[](Gdiplus::GraphicsPath& path){CornerUI::roundPath(path,0,0,260,298,40);});
+    }
 }
 static UINT showTrayPopup(HWND owner) {
     using namespace CornerTray;
@@ -52,9 +69,11 @@ static UINT showTrayPopup(HWND owner) {
     int width=px(260),height=px(298);
     int x=std::clamp(int(point.x)-width+px(16),int(monitor.rcWork.left+px(8)),int(monitor.rcWork.right-width-px(8)));
     int y=std::max(int(monitor.rcWork.top+px(8)),std::min(int(point.y)-height-px(10),int(monitor.rcWork.bottom-height-px(8))));
-    popup=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,c.lpszClassName,L"corner",WS_POPUP|WS_CLIPCHILDREN,x,y,width,height,owner,nullptr,c.hInstance,nullptr);
+    // A UIAccess popup must start in the same band as its layered frame.
+    // Giving it the hidden ordinary controller as owner keeps it in band 1.
+    popup=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,c.lpszClassName,L"corner",WS_POPUP|WS_CLIPCHILDREN,x,y,width,height,nullptr,nullptr,c.hInstance,nullptr);
     if(popup) {
-        SetWindowRgn(popup,CreateRoundRectRgn(0,0,width+1,height+1,px(80),px(80)),TRUE);
+        shape(popup);
         createButtons(popup);
         ShowWindow(popup,SW_SHOW);SetForegroundWindow(popup);SetFocus(GetDlgItem(popup,1));
         bool stop=false;

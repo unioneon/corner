@@ -11,9 +11,7 @@ namespace CornerUI {
     static bool previewSent=false;
     static Settings displayed;
     static bool displayedValid=false;
-    static HWND backdropWindow=nullptr;
-    static std::vector<BYTE> edgeAlpha;
-    static int edgeWidth=0,edgeHeight=0;
+    static SmoothFrame::Surface frame;
     template<class Painter> static void buffered(HDC target,int width,int height,Painter paint,const RECT* dirty=nullptr) {
         HDC buffer=CreateCompatibleDC(target);HBITMAP bitmap=CreateCompatibleBitmap(target,width,height);
         if(!buffer||!bitmap){if(bitmap)DeleteObject(bitmap);if(buffer)DeleteDC(buffer);paint(target);return;}
@@ -54,49 +52,8 @@ namespace CornerUI {
         p.AddBezier(12.1226f,7.81032f,10.5578f,9.11445f,9.11445f,10.5578f,7.81032f,12.1226f);
         p.AddBezier(7.81032f,12.1226f,0.0f,21.4943f,0.0f,35.4962f,0.0f,63.5f);p.CloseFigure();
     }
-    static LRESULT CALLBACK backdropProc(HWND w,UINT msg,WPARAM a,LPARAM b) {
-        if(msg==WM_NCHITTEST)return HTTRANSPARENT;
-        if(msg==WM_MOUSEACTIVATE)return MA_NOACTIVATE;
-        return DefWindowProcW(w,msg,a,b);
-    }
-    static void moveBackdrop() {
-        if(!backdropWindow)return;
-        RECT r{};GetWindowRect(window,&r);
-        SetWindowPos(backdropWindow,nullptr,r.left,r.top,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE);
-    }
     static void shape() {
-        RECT bounds{},position{};GetClientRect(window,&bounds);GetWindowRect(window,&position);
-        int width=bounds.right,height=bounds.bottom;if(width<1||height<1)return;
-        if(!backdropWindow) {
-            WNDCLASSW c{};c.lpfnWndProc=backdropProc;c.hInstance=GetModuleHandleW(nullptr);c.lpszClassName=L"corner.SmoothBackdrop";RegisterClassW(&c);
-            backdropWindow=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TRANSPARENT,c.lpszClassName,L"",WS_POPUP,position.left,position.top,width,height,nullptr,nullptr,c.hInstance,nullptr);
-            if(!backdropWindow)return;
-            // The interactive window stays above its click-through alpha backdrop.
-            SetWindowLongPtrW(window,GWLP_HWNDPARENT,reinterpret_cast<LONG_PTR>(backdropWindow));
-        }
-        Gdiplus::Bitmap supersampled(width*4,height*4,PixelFormat32bppPARGB);
-        {Gdiplus::Graphics g(&supersampled);g.Clear(Gdiplus::Color(0,0,0,0));g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);g.ScaleTransform(factor()*4,factor()*4);Gdiplus::GraphicsPath path;outerPath(path);Gdiplus::SolidBrush brush(face());g.FillPath(&brush,&path);}
-        Gdiplus::Bitmap image(width,height,PixelFormat32bppPARGB);
-        {Gdiplus::Graphics g(&image);g.Clear(Gdiplus::Color(0,0,0,0));g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);g.DrawImage(&supersampled,0,0,width,height);}
-        Gdiplus::Rect rect(0,0,width,height);Gdiplus::BitmapData pixels{};
-        if(image.LockBits(&rect,Gdiplus::ImageLockModeRead,PixelFormat32bppPARGB,&pixels)!=Gdiplus::Ok)return;
-        BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=width;info.bmiHeader.biHeight=-height;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
-        HDC dc=CreateCompatibleDC(nullptr);void* raw=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&raw,nullptr,0);
-        if(!dc||!bitmap||!raw){if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);image.UnlockBits(&pixels);return;}
-        edgeWidth=width;edgeHeight=height;edgeAlpha.resize(width*height);std::vector<RECT> spans;
-        for(int y=0;y<height;y++) {
-            const BYTE* row=static_cast<const BYTE*>(pixels.Scan0)+y*pixels.Stride;CopyMemory(static_cast<BYTE*>(raw)+y*width*4,row,width*4);
-            int first=width,last=-1;
-            for(int x=0;x<width;x++){BYTE alpha=row[x*4+3];edgeAlpha[y*width+x]=alpha;if(alpha==255){first=std::min(first,x);last=x;}}
-            if(last>=first)spans.push_back({first,y,last+1,y+1});
-        }
-        image.UnlockBits(&pixels);HGDIOBJ old=SelectObject(dc,bitmap);POINT dst{position.left,position.top},src{};SIZE size{width,height};BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-        BOOL ok=UpdateLayeredWindow(backdropWindow,nullptr,&dst,&size,dc,&src,0,&blend,ULW_ALPHA);SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);
-        if(ok&&!spans.empty()) {
-            std::vector<BYTE> data(sizeof(RGNDATAHEADER)+spans.size()*sizeof(RECT));auto region=reinterpret_cast<RGNDATA*>(data.data());region->rdh={sizeof(RGNDATAHEADER),RDH_RECTANGLES,DWORD(spans.size()),DWORD(spans.size()*sizeof(RECT)),{0,0,width,height}};
-            CopyMemory(region->Buffer,spans.data(),spans.size()*sizeof(RECT));HRGN native=ExtCreateRegion(nullptr,DWORD(data.size()),region);if(native)SetWindowRgn(window,native,TRUE);
-            if(IsWindowVisible(window))ShowWindow(backdropWindow,SW_SHOWNOACTIVATE);
-        }
+        frame.rebuild(window,factor(),face(),false,!isDark(),outerPath);
     }
     static bool refreshTheme() {
         bool dark=isDark();if(logoIcon&&dark==lastDark)return false;lastDark=dark;
@@ -124,7 +81,7 @@ namespace CornerUI {
         bool themeChanged=refreshTheme();
         auto invalidate=[](int id){InvalidateRect(item(id),nullptr,FALSE);};
         auto percent=[](bool up){RECT r{px(402),px(up?23:61),px(467),px(up?59:97)};InvalidateRect(window,&r,FALSE);};
-        if(themeChanged&&backdropWindow)shape();
+        if(themeChanged&&frame.backdrop)shape();
         if(!displayedValid||themeChanged) {
             InvalidateRect(window,nullptr,FALSE);
             for(int id:{Up,Down,Startup,Apply,OK,Logo,UpSlider,DownSlider})invalidate(id);
@@ -171,8 +128,6 @@ namespace CornerUI {
     }
     static LRESULT CALLBACK noErase(HWND w,UINT msg,WPARAM a,LPARAM b,UINT_PTR,DWORD_PTR) {
         if(msg==WM_ERASEBKGND)return 1;
-        if(msg==WM_WINDOWPOSCHANGED){moveBackdrop();}
-        if(msg==WM_SHOWWINDOW&&backdropWindow){ShowWindow(backdropWindow,a?SW_SHOWNOACTIVATE:SW_HIDE);}
         return DefSubclassProc(w,msg,a,b);
     }
     static HWND add(const wchar_t* cls,const wchar_t* title,int id,DWORD style,float x,float y,float w,float h) {
@@ -244,6 +199,9 @@ namespace CornerUI {
         text(g,up.c_str(),{402,23,65,36},19,label());text(g,down.c_str(),{402,61,65,36},19,label());
     }
     static LRESULT CALLBACK proc(HWND w,UINT msg,WPARAM a,LPARAM b) {
+        if(msg==WM_SHOWWINDOW){frame.sync(w,a!=0);}
+        if(msg==WM_WINDOWPOSCHANGED){frame.sync(w,IsWindowVisible(w)!=FALSE);}
+        if(msg==WM_SIZE){frame.sync(w,IsWindowVisible(w)!=FALSE);}
         if(msg==WM_CREATE){window=w;dpi=GetDpiForWindow(w);draft=readSettings();if(settingsFileOverride.empty())draft.startup=startupEnabled();if(!draft.enabled){draft.top=false;draft.bottom=false;}applied=draft;controls();shape();return 0;}
         if(msg==WM_DRAWITEM){drawButton(reinterpret_cast<DRAWITEMSTRUCT*>(b));return TRUE;}
         if(msg==WM_NOTIFY){auto h=reinterpret_cast<NMHDR*>(b);if(h->code==NM_CUSTOMDRAW&&(h->idFrom==UpSlider||h->idFrom==DownSlider))return sliderDraw(reinterpret_cast<NMCUSTOMDRAW*>(b));}
@@ -276,7 +234,7 @@ namespace CornerUI {
         if(msg==WM_SETTINGCHANGE){updated();return 0;}
         if(msg==WM_DPICHANGED){dpi=HIWORD(a);RECT* r=reinterpret_cast<RECT*>(b);SetWindowPos(w,nullptr,r->left,r->top,r->right-r->left,r->bottom-r->top,SWP_NOZORDER|SWP_NOACTIVATE);HWND c=GetWindow(w,GW_CHILD);while(c){HWND next=GetWindow(c,GW_HWNDNEXT);DestroyWindow(c);c=next;}controls();shape();return 0;}
         if(msg==WM_CLOSE){DestroyWindow(w);return 0;}
-        if(msg==WM_DESTROY){rollbackPreview();if(backdropWindow){SetWindowLongPtrW(w,GWLP_HWNDPARENT,0);DestroyWindow(backdropWindow);backdropWindow=nullptr;}PostQuitMessage(0);return 0;}
+        if(msg==WM_DESTROY){rollbackPreview();frame.release(w);PostQuitMessage(0);return 0;}
         return DefWindowProcW(w,msg,a,b);
     }
 }

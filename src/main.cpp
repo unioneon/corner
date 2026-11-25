@@ -408,6 +408,7 @@ static bool spawn(const std::wstring& args,PROCESS_INFORMATION& pi) {
     return CreateProcessW(nullptr,command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&si,&pi);
 #endif
 }
+#include "smooth_frame.h"
 #include "settings_ui.h"
 #include "tray_ui.h"
 #include "capture_ui.h"

@@ -1,4 +1,20 @@
-# corner 1.3.0 — Game Mode + corners above Start
+# corner 1.3.1 — Smooth edges + subtle light-theme shadows
+
+- Fixed the settings window's alpha edge not appearing together with the native window. The edge now follows showing, hiding, moving and DPI changes.
+- Replaced the tray menu's binary rounded clipping with the same supersampled alpha frame used by Settings.
+- Added a soft, click-through shadow to light Settings and light tray menus so their outlines remain visible on white backgrounds.
+- Updated all four native screenshots, including both tray menu themes shown side by side in the README.
+- Added regression checks for partial-alpha edges, opaque input regions, frame visibility/movement and 100%, 125%, 150% and 200% scaling.
+
+> [!IMPORTANT]
+> **Why approve UAC during installation?** Administrator approval lets setup
+> install corner's protected component in Program Files and configure a local
+> trusted code-signing certificate. **This keeps corners visible above Start and
+> the taskbar.** Setup does this automatically; no extra setting is needed.
+> The private key stays on your PC. Uninstall removes the component, certificate
+> and key. UIAccess expands access to other applications' UI; its use here is experimental.
+
+## corner 1.3.0 — Game Mode + corners above Start
 
 - **Game Mode:** a new Game entry directly below Settings in the tray menu. A blue dot means enabled; click again to disable. Your choice is saved.
 - Game Mode keeps corners enabled in fullscreen and adds a layer-order check only while a fullscreen window is active.
