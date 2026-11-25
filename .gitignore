@@ -1,0 +1,16 @@
+/bin/
+/dist/
+/build/
+/verification/
+/assets/SF-Pro-Display-*.otf
+/assets/1.svg
+/assets/2.svg
+/assets/3.svg
+/tests/diagnose-layers.ps1
+/tests/inspect-rounded.ps1
+/tests/verify.ps1
+/settings.ini
+/settings.ini.tmp
+/fonts/
+*.o
+*.log

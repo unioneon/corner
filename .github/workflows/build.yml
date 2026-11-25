@@ -1,0 +1,24 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc
+      - name: Build
+        shell: pwsh
+        run: |
+          $env:PATH="C:\msys64\mingw64\bin;$env:PATH"
+          .\build.ps1 -Compiler C:\msys64\mingw64\bin\g++.exe
+      - name: Test native core and UI export
+        shell: pwsh
+        run: .\tests\smoke.ps1

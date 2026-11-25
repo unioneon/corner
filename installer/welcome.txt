@@ -1,0 +1,11 @@
+corner
+A softer edge to Windows.
+
+Round the top, the bottom, or all four corners of your display.
+Preview changes instantly. Apply saves; OK closes and discards unsaved changes.
+
+corner installs for your current Windows account. It adds a tray menu and a
+Start menu shortcut, and can start when you sign in. Control that preference
+with Start Windows in Settings.
+
+No telemetry. No bundled Apple fonts. No separate runtime download.
