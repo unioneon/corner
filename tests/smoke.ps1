@@ -14,11 +14,11 @@ try {
     if($process.ExitCode){throw 'Native UI capture failed'}
     $capture=Get-Content -LiteralPath $captureReport -Raw|ConvertFrom-Json
     if($capture.antialiasedEdgePixels -le 0){throw 'The UI contour has no antialiasing'}
-    foreach($name in 'settings-light.png','settings-dark.png'){if((Get-Item -LiteralPath (Join-Path $captures $name)).Length -lt 1000){throw 'Empty screenshot'}}
+    foreach($name in 'settings-light.png','settings-dark.png','tray-game-light.png','tray-game-dark.png'){if((Get-Item -LiteralPath (Join-Path $captures $name)).Length -lt 1000){throw 'Empty screenshot'}}
     [pscustomobject]@{SelfTest='pass';NativeUiCapture='pass';AntialiasedPixels=$capture.antialiasedEdgePixels;Font=$capture.font}|ConvertTo-Json
 }finally{
     # Delete only the known files created by this test, never recurse.
-    foreach($name in @('self-test.json','capture.json','captures\settings-light.png','captures\settings-dark.png')){$file=Join-Path $temp $name;if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
+    foreach($name in @('self-test.json','capture.json','captures\settings-light.png','captures\settings-dark.png','captures\tray-game-light.png','captures\tray-game-dark.png')){$file=Join-Path $temp $name;if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
     $dir=Join-Path $temp 'captures';if((Test-Path -LiteralPath $dir) -and !(Get-ChildItem -LiteralPath $dir -Force)){Remove-Item -LiteralPath $dir}
     if(!(Get-ChildItem -LiteralPath $temp -Force)){Remove-Item -LiteralPath $temp}
 }

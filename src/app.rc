@@ -1,10 +1,14 @@
 #include <windows.h>
+#ifdef CORNER_UIACCESS
+1 RT_MANIFEST "app-uiaccess.manifest"
+#else
 1 RT_MANIFEST "app.manifest"
+#endif
 101 ICON "../assets/corner-black.ico"
 102 ICON "../assets/corner-white.ico"
 1 VERSIONINFO
-FILEVERSION 1,2,2,0
-PRODUCTVERSION 1,2,2,0
+FILEVERSION 1,3,0,0
+PRODUCTVERSION 1,3,0,0
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -13,12 +17,12 @@ BEGIN
     BLOCK "040904b0"
     BEGIN
       VALUE "FileDescription", "corner\0"
-      VALUE "FileVersion", "1.2.2.0\0"
+      VALUE "FileVersion", "1.3.0.0\0"
       VALUE "CompanyName", "unioneon\0"
       VALUE "LegalCopyright", "Copyright (c) 2026 unioneon\0"
       VALUE "ProductName", "corner\0"
       VALUE "OriginalFilename", "corner.exe\0"
-      VALUE "ProductVersion", "1.2.2\0"
+      VALUE "ProductVersion", "1.3.0\0"
     END
   END
   BLOCK "VarFileInfo"

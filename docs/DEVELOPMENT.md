@@ -8,6 +8,7 @@ The background renderer and its supervisor wait on events and process handles.
 
 ```powershell
 .\build.ps1 -Compiler C:\w64devkit\bin\g++.exe
+.\build.ps1 -UIAccess
 .\tests\smoke.ps1
 .\bin\corner.exe --self-test --report result.json
 .\bin\corner.exe --export-ui C:\captures --report capture.json
@@ -49,4 +50,4 @@ Artifacts are staged from an explicit allowlist. Personal preferences and
 fonts are never copied into downloads. The source archive uses `git archive`
 so it matches the committed release. Check `SHA256SUMS.txt` before uploading.
 
-The release EXE is unsigned. Windows may identify its publisher as unknown.
+Public downloads are unsigned. Windows may identify the installer publisher as unknown. The protected payload is signed locally during setup; never stage a locally signed binary or export its private key. See [Enhanced renderer](ENHANCED.md).

@@ -2,16 +2,24 @@ param([string]$InstallerCompiler,[string]$Version=(Get-Content (Join-Path $PSScr
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent));$exe=Join-Path $root 'bin\corner.exe'
 if(!(Test-Path -LiteralPath $exe)){throw 'Build bin/corner.exe first.'}
+$enhancedExe=Join-Path $root 'bin\uiaccess\corner.exe'
+if(!(Test-Path -LiteralPath $enhancedExe)){throw 'Build the unsigned Enhanced payload with build.ps1 -UIAccess first.'}
+if((Get-AuthenticodeSignature -LiteralPath $enhancedExe).Status -ne 'NotSigned'){throw 'Never publish a machine-local signed Enhanced binary.'}
+if((Get-Item -LiteralPath $enhancedExe).VersionInfo.ProductVersion -ne $Version){throw 'Enhanced payload and release versions differ.'}
 if((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -ne $Version){throw 'Executable and release versions differ.'}
 if(!$InstallerCompiler){$InstallerCompiler=Join-Path $root '..\tools\InnoSetup7\ISCC.exe'}
 if(!(Test-Path -LiteralPath $InstallerCompiler)){throw 'Pass -InstallerCompiler with the path to Inno Setup ISCC.exe.'}
 $dist=Join-Path $root 'dist';$stage=Join-Path $dist ('corner-'+$Version+'-portable')
 New-Item -ItemType Directory -Path $dist -Force|Out-Null
 if(Test-Path -LiteralPath $stage){
-    $allowed=@('manage.ps1','Settings.cmd','Install.cmd','Uninstall.cmd','LICENSE','THIRD_PARTY_NOTICES.md','corner.exe','MinGW-RUNTIME.txt','README.txt')
-    foreach($entry in Get-ChildItem -LiteralPath $stage -Force){if($entry.PSIsContainer -or $entry.Name -notin $allowed){throw 'Unexpected portable staging content. Use a fresh folder.'}}
+    $allowed=@('manage.ps1','Settings.cmd','Install.cmd','Uninstall.cmd','LICENSE','THIRD_PARTY_NOTICES.md','corner.exe','MinGW-RUNTIME.txt','README.txt','enhanced.ps1','enhanced-admin.ps1','enhanced')
+    foreach($entry in Get-ChildItem -LiteralPath $stage -Force){if($entry.Name -notin $allowed -or ($entry.PSIsContainer -and $entry.Name -ne 'enhanced')){throw 'Unexpected portable staging content. Use a fresh folder.'}}
+    if(Test-Path (Join-Path $stage 'enhanced')){foreach($entry in Get-ChildItem (Join-Path $stage 'enhanced') -Force){if($entry.PSIsContainer -or $entry.Name -ne 'corner.exe'){throw 'Unexpected Enhanced payload content.'}}}
 }else{New-Item -ItemType Directory -Path $stage|Out-Null}
 foreach($file in @('manage.ps1','Settings.cmd','Install.cmd','Uninstall.cmd','LICENSE','THIRD_PARTY_NOTICES.md')){Copy-Item -LiteralPath (Join-Path $root $file) -Destination $stage -Force}
+foreach($file in @('enhanced.ps1','enhanced-admin.ps1')){Copy-Item -LiteralPath (Join-Path $root $file) -Destination $stage -Force}
+New-Item -ItemType Directory -Force -Path (Join-Path $stage 'enhanced')|Out-Null
+Copy-Item -LiteralPath $enhancedExe -Destination (Join-Path $stage 'enhanced\corner.exe') -Force
 Copy-Item -LiteralPath $exe -Destination $stage -Force
 Copy-Item -LiteralPath (Join-Path $root 'docs\MinGW-RUNTIME.txt') -Destination $stage -Force
 @'
@@ -23,6 +31,10 @@ To install for your current account, run Install.cmd.
 Up / Down: toggle the upper / lower pair. Sliders preview immediately.
 Apply: save. OK: close and return to the last Apply.
 Click the logo for mask color and appearance. Start Windows controls sign-in.
+Tray > Game: toggle Game Mode; a blue dot indicates enabled.
+For corners above Start, install first and run enhanced.ps1 Enable. It asks
+for explicit consent and administrator approval to trust a local certificate.
+Run enhanced.ps1 Disable to remove Enhanced mode and its certificate/key.
 
 https://github.com/unioneon/corner
 '@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding UTF8

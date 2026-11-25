@@ -14,3 +14,10 @@
 /fonts/
 *.o
 *.log
+
+/scripts/uiaccess-local.ps1
+/scripts/uiaccess-rollback.ps1
+*.pfx
+*.p12
+*.cer
+*.pem

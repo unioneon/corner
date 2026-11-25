@@ -1,5 +1,5 @@
 struct Settings {
-    bool enabled=true,top=true,bottom=true,white=false,startup=true,hideFullscreen=false;
+    bool enabled=true,top=true,bottom=true,white=false,startup=true,hideFullscreen=false,game=false;
     int radius=40,up=16,down=16,theme=0;
 };
 static Settings settings;
@@ -13,9 +13,21 @@ static void normalize(Settings& s) {
     s.radius=std::max(radiusFor(s.up),radiusFor(s.down));
 }
 static bool sameSettings(const Settings& a,const Settings& b) {
-    return a.enabled==b.enabled&&a.top==b.top&&a.bottom==b.bottom&&a.white==b.white&&a.startup==b.startup&&a.hideFullscreen==b.hideFullscreen&&a.up==b.up&&a.down==b.down&&a.theme==b.theme;
+    return a.enabled==b.enabled&&a.top==b.top&&a.bottom==b.bottom&&a.white==b.white&&a.startup==b.startup&&a.hideFullscreen==b.hideFullscreen&&a.game==b.game&&a.up==b.up&&a.down==b.down&&a.theme==b.theme;
 }
-static std::wstring settingsPath() {if(!settingsFileOverride.empty())return settingsFileOverride;auto p=exePath();return p.substr(0,p.find_last_of(L"\\/"))+L"\\settings.ini";}
+static std::wstring settingsPath() {
+    if(!settingsFileOverride.empty())return settingsFileOverride;
+#ifdef CORNER_UIACCESS
+    // A signed UIAccess build must live in Program Files. Keep preferences in
+    // the existing per-user folder, outside that protected binary directory.
+    PWSTR local=nullptr;
+    if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&local)))throw std::runtime_error("Cannot locate user preferences");
+    std::wstring folder=std::wstring(local)+L"\\corner";CoTaskMemFree(local);
+    CreateDirectoryW(folder.c_str(),nullptr);return folder+L"\\settings.ini";
+#else
+    auto p=exePath();return p.substr(0,p.find_last_of(L"\\/"))+L"\\settings.ini";
+#endif
+}
 static Settings readSettings(int fallback=40) {
     auto path=settingsPath();Settings s;
     s.enabled=GetPrivateProfileIntW(L"Corners",L"Enabled",1,path.c_str())!=0;
@@ -24,6 +36,7 @@ static Settings readSettings(int fallback=40) {
     s.white=GetPrivateProfileIntW(L"Corners",L"White",0,path.c_str())!=0;
     s.startup=GetPrivateProfileIntW(L"Corners",L"Startup",1,path.c_str())!=0;
     s.hideFullscreen=GetPrivateProfileIntW(L"Corners",L"HideFullscreen",0,path.c_str())!=0;
+    s.game=GetPrivateProfileIntW(L"Corners",L"Game",0,path.c_str())!=0;
     int legacy=std::clamp(int(GetPrivateProfileIntW(L"Corners",L"Radius",fallback,path.c_str())),0,256);
     s.up=int(GetPrivateProfileIntW(L"Corners",L"UpPercent",MulDiv(legacy,100,256),path.c_str()));
     s.down=int(GetPrivateProfileIntW(L"Corners",L"DownPercent",MulDiv(legacy,100,256),path.c_str()));
@@ -31,7 +44,7 @@ static Settings readSettings(int fallback=40) {
 }
 static bool saveSettings(const Settings& input) {
     Settings s=input;normalize(s);auto path=settingsPath(),temp=path+L".tmp";
-    std::string data="[Corners]\r\nEnabled="+std::to_string(s.enabled)+"\r\nTop="+std::to_string(s.top)+"\r\nBottom="+std::to_string(s.bottom)+"\r\nWhite="+std::to_string(s.white)+"\r\nRadius="+std::to_string(s.radius)+"\r\nUpPercent="+std::to_string(s.up)+"\r\nDownPercent="+std::to_string(s.down)+"\r\nStartup="+std::to_string(s.startup)+"\r\nHideFullscreen="+std::to_string(s.hideFullscreen)+"\r\nTheme="+std::to_string(s.theme)+"\r\n";
+    std::string data="[Corners]\r\nEnabled="+std::to_string(s.enabled)+"\r\nTop="+std::to_string(s.top)+"\r\nBottom="+std::to_string(s.bottom)+"\r\nWhite="+std::to_string(s.white)+"\r\nRadius="+std::to_string(s.radius)+"\r\nUpPercent="+std::to_string(s.up)+"\r\nDownPercent="+std::to_string(s.down)+"\r\nStartup="+std::to_string(s.startup)+"\r\nHideFullscreen="+std::to_string(s.hideFullscreen)+"\r\nGame="+std::to_string(s.game)+"\r\nTheme="+std::to_string(s.theme)+"\r\n";
     HANDLE file=CreateFileW(temp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(file==INVALID_HANDLE_VALUE)return false;
     DWORD written=0;BOOL ok=WriteFile(file,data.data(),DWORD(data.size()),&written,nullptr);CloseHandle(file);

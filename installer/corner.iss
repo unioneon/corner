@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.2.2"
+  #define AppVersion "1.3.0"
 #endif
 
 [Setup]
@@ -42,6 +42,9 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
 Source: "..\bin\corner.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\manage.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\enhanced.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\enhanced-admin.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\bin\uiaccess\corner.exe"; DestDir: "{app}\enhanced"; Flags: ignoreversion
 Source: "ownership.marker"; DestDir: "{app}"; DestName: ".corner-install"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
@@ -53,6 +56,7 @@ Name: "{autodesktop}\corner"; Filename: "{app}\corner.exe"; Parameters: "--setti
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "{code:InstallParameters}"; Flags: runhidden waituntilterminated
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\enhanced.ps1"" Enable -Consent -InstallDir ""{app}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\corner.exe"; Parameters: "--settings"; Description: "Open corner settings"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

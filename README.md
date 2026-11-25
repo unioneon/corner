@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.3.0/corner-1.3.0-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
   &nbsp;
-  <a href="https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.3.0/corner-1.3.0-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
 </p>
 
 <p align="center">
@@ -33,10 +33,12 @@ window and corner stays quietly in the system tray.
 | **Live preview** | Changes appear on the desktop immediately. Apply saves them; OK closes and discards changes made since the last Apply. |
 | **Light + dark** | A compact settings window and tray menu, with smooth window edges and your choice of appearance. |
 | **Black or white** | Match the corner masks to your screen surround. Click the corner logo to change color and theme. |
-| **Quiet by design** | Native Win32, event-driven rendering, no animation loop and no periodic health polling. |
+| **Quiet by design** | Native Win32, event-driven rendering, no animation loop or idle polling; Game checks run only during active fullscreen. |
 | **Ready at sign-in** | Start Windows controls the current user's sign-in task. A waiting supervisor restores a crashed renderer. |
 | **Click-through masks** | The decorative corners don't intercept clicks or activate themselves. |
 | **Capture-aware** | The masks request exclusion from supported Windows capture APIs. The settings window remains capturable. |
+| **Game Mode** | Click **Game** in the tray menu. A blue dot means enabled; click again to switch it off. Keeps corners enabled in fullscreen and strengthens overlay ordering while a fullscreen window is active. |
+| **Above Start** | Setup automatically configures a locally signed UIAccess renderer to keep corners above Start and the taskbar. Administrator approval is required during installation. |
 
 ## Meet the interface
 
@@ -48,15 +50,20 @@ window and corner stays quietly in the system tray.
 
 ![Actual native corner settings in the dark theme, in English](docs/images/settings-dark.png)
 
+### Game Mode
+
+![Actual corner tray menu with Game Mode enabled](docs/images/tray-game-dark.png)
+
 *The settings images are captured from the compiled Win32 controls using
 Windows print messages. The cover is stylized, AI-assisted promotional
 artwork based on those captures. [Artwork details](docs/design/POSTER.md).*
 
 ## Get started
 
-1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Setup-x64.exe),
-   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Portable-x64.zip)
+1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.3.0/corner-1.3.0-Setup-x64.exe),
+   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.3.0/corner-1.3.0-Portable-x64.zip)
    and run `corner.exe`.
+   Approve Windows' UAC prompt; setup handles the configuration automatically.
 2. Click the tray icon and choose **Settings**. The desktop and Start menu
    shortcuts open the same window.
 3. Choose **Up**, **Down**, and their percentages. Preview changes immediately.
@@ -69,6 +76,23 @@ you click Apply. The tray's **Disable / Enable** entry pauses or restores the
 decoration; **Exit** ends the current session without removing your sign-in
 preference.
 
+**Game Mode:** choose **Game** immediately below Settings in the tray menu.
+The blue dot indicates that it is enabled. Your choice survives restarts.
+The new mode and corners with Start open were tested on the developer's
+Windows system; the user also confirmed that corners remained visible in games.
+This is not a compatibility guarantee for every game or anti-cheat system.
+
+> [!IMPORTANT]
+> **Why approve UAC during installation?** Windows needs administrator approval
+> to install corner's protected component in Program Files and configure its
+> local trusted code-signing certificate. **This keeps the corners visible above
+> Start and the taskbar.** Setup does this automatically; there is no extra mode
+> to configure. The key stays on your PC and is removed on uninstall.
+
+The installed component uses UIAccess, which broadens access to other apps' UI;
+Microsoft reserves it for accessibility software, so its use here is experimental.
+[Signing, permissions and removal details](docs/ENHANCED.md).
+
 ## A few practical details
 
 - **Requirements:** Windows 10 version 2004 or newer, or Windows 11; x64.
@@ -79,6 +103,8 @@ preference.
 - **Fullscreen:** corners remain visible in browser video and normal borderless
   fullscreen by default. Click the logo → **Fullscreen → Show corners / Hide corners**
   to choose the behavior. Exclusive fullscreen games may bypass ordinary overlays.
+  Game Mode overrides automatic fullscreen hiding while enabled. Use borderless
+  fullscreen for the best compatibility; true exclusive fullscreen is not guaranteed.
 - **Screen capture:** exclusion depends on the Windows capture path. It is
   best-effort, not a guarantee for every recorder, driver or sharing program.
 - **Virtual desktops:** experimental pinning uses an optional private COM
@@ -94,6 +120,9 @@ corner makes no network requests and contains no telemetry. Preferences stay
 in `settings.ini` beside the executable. Installed copies live in
 `%LOCALAPPDATA%\corner`; portable copies keep preferences in their extracted
 folder. Don't run the portable app directly inside the ZIP.
+Enhanced mode shares the same per-user settings; its protected executable does
+not store preferences in Program Files. Game Mode's extra layer check runs only
+while an enabled fullscreen window is active; there is no idle game timer.
 
 ## Manage it with a script
 

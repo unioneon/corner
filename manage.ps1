@@ -12,6 +12,8 @@ $taskName='corner-'+$sid;$legacyTaskName='GlassCorners-'+$sid
 $sourceExe=Join-Path $PSScriptRoot 'bin\corner.exe'
 if(!(Test-Path -LiteralPath $sourceExe)){$sourceExe=Join-Path $PSScriptRoot 'corner.exe'}
 $installedExe=Join-Path $InstallDir 'corner.exe'
+$uiAccessExe=Join-Path $env:ProgramFiles 'corner\corner.exe'
+$uiAccessMarker=Join-Path $InstallDir '.uiaccess-runtime'
 $legacyDir=Join-Path $env:LOCALAPPDATA 'GlassCorners'
 $legacyExe=Join-Path $legacyDir 'GlassCorners.exe'
 if(!$Demo -and !$LeftMask -and !$RightMask){$Rounded=$true}
@@ -23,7 +25,7 @@ function Invoke-Corner([string]$Executable,[string[]]$Arguments,[switch]$ReadJso
     if($ReadJson){$temp=[IO.Path]::GetTempFileName();$items+=@('--report',$temp)}
     try {
         $info=New-Object Diagnostics.ProcessStartInfo;$info.FileName=$Executable
-        $info.Arguments=($items|ForEach-Object {Quote-Arg $_}) -join ' ';$info.UseShellExecute=$false;$info.CreateNoWindow=$true
+        $info.Arguments=($items|ForEach-Object {Quote-Arg $_}) -join ' ';$info.UseShellExecute=($Executable -eq $uiAccessExe -and (Test-Path -LiteralPath $uiAccessMarker));$info.CreateNoWindow=$true;$info.WindowStyle='Hidden'
         $process=[Diagnostics.Process]::Start($info)
         if(!$process.WaitForExit(10000)){$process.Kill();throw 'corner command timed out'}
         $data=$null;if($ReadJson){$data=Get-Content -LiteralPath $temp -Raw | ConvertFrom-Json}
@@ -31,7 +33,7 @@ function Invoke-Corner([string]$Executable,[string[]]$Arguments,[switch]$ReadJso
         if($ReadJson){$data}
     }finally{if($temp -and (Test-Path -LiteralPath $temp)){Remove-Item -LiteralPath $temp}}
 }
-function Runtime-Exe {if(Test-Path -LiteralPath $installedExe){$installedExe}else{$sourceExe}}
+function Runtime-Exe {if((Test-Path -LiteralPath $uiAccessMarker) -and (Test-Path -LiteralPath $uiAccessExe)){$uiAccessExe}elseif(Test-Path -LiteralPath $installedExe){$installedExe}else{$sourceExe}}
 function Stop-Corner {
     $task=Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if($task){Disable-ScheduledTask -TaskName $taskName | Out-Null}
@@ -105,6 +107,16 @@ switch($Action) {
         if(!(Test-Path -LiteralPath $newSettings) -and (Test-Path -LiteralPath $oldSettings)){Copy-Item -LiteralPath $oldSettings -Destination $newSettings}
         if([IO.Path]::GetFullPath($sourceExe) -ne [IO.Path]::GetFullPath($installedExe)){Copy-Item -LiteralPath $sourceExe -Destination $installedExe -Force}
         $manager=Join-Path $absolute 'manage.ps1';if([IO.Path]::GetFullPath($PSCommandPath) -ne [IO.Path]::GetFullPath($manager)){Copy-Item -LiteralPath $PSCommandPath -Destination $manager -Force}
+        foreach($name in @('enhanced.ps1','enhanced-admin.ps1')) {
+            $from=Join-Path $PSScriptRoot $name;$to=Join-Path $absolute $name
+            if((Test-Path -LiteralPath $from) -and [IO.Path]::GetFullPath($from) -ne [IO.Path]::GetFullPath($to)){Copy-Item -LiteralPath $from -Destination $to -Force}
+        }
+        $payload=Join-Path $PSScriptRoot 'enhanced\corner.exe';if(!(Test-Path -LiteralPath $payload)){$payload=Join-Path $PSScriptRoot 'bin\uiaccess\corner.exe'}
+        $payloadTarget=Join-Path $absolute 'enhanced\corner.exe'
+        if((Test-Path -LiteralPath $payload) -and [IO.Path]::GetFullPath($payload) -ne [IO.Path]::GetFullPath($payloadTarget)) {
+            New-Item -ItemType Directory -Path (Split-Path $payloadTarget -Parent) -Force|Out-Null
+            Copy-Item -LiteralPath $payload -Destination $payloadTarget -Force
+        }
         $items=@('--supervise');if($DebugMode){$items+='--debug'}
         if($Demo){$items+='--demo'}elseif($Rounded){$items+=@('--rounded','--radius',[string]$Radius,'--panel',$candidates[0].path)}else{
             Copy-Item -LiteralPath $LeftMask -Destination (Join-Path $absolute 'left.png') -Force;Copy-Item -LiteralPath $RightMask -Destination (Join-Path $absolute 'right.png') -Force
@@ -135,13 +147,15 @@ switch($Action) {
         [pscustomobject]@{Installed=$true;Product='corner';InstallDir=$absolute;Runtime=$live}|ConvertTo-Json -Depth 5
     }
     'uninstall' {
+        if(Test-Path -LiteralPath $uiAccessMarker){& (Join-Path $InstallDir 'enhanced.ps1') Disable -Consent -InstallDir $InstallDir}
         $absolute=[IO.Path]::GetFullPath($InstallDir).TrimEnd('\');$marker=Join-Path $absolute '.corner-install'
         if(!(Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw).Trim() -ne 'corner per-user install v1'){throw 'Invalid ownership marker. No files removed.'}
         Stop-Corner;$task=Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
         if($task){Unregister-ScheduledTask -TaskName $taskName -Confirm:$false}
         try{Invoke-Corner $installedExe @('--unpin-helper')}catch{Write-Warning $_}
         foreach($folder in @([Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('Desktop'))){$link=Join-Path $folder 'corner.lnk';if(Test-Path -LiteralPath $link){Remove-Item -LiteralPath $link -Force}}
-        foreach($name in @('corner.exe','manage.ps1','settings.ini','settings.ini.tmp','left.png','right.png','.corner-install')){$target=Join-Path $absolute $name;if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Force}}
+        foreach($name in @('corner.exe','manage.ps1','settings.ini','settings.ini.tmp','left.png','right.png','.corner-install','enhanced.ps1','enhanced-admin.ps1','enhanced-result.json','enhanced\corner.exe')){$target=Join-Path $absolute $name;if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Force}}
+        $payloadFolder=Join-Path $absolute 'enhanced';if((Test-Path -LiteralPath $payloadFolder) -and !(Get-ChildItem -LiteralPath $payloadFolder -Force)){Remove-Item -LiteralPath $payloadFolder}
         if(!(Get-ChildItem -LiteralPath $absolute -Force)){Remove-Item -LiteralPath $absolute}
         'corner uninstalled.'
     }

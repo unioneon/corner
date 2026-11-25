@@ -9,3 +9,13 @@ Start menu shortcut, and can start when you sign in. Control that preference
 with Start Windows in Settings.
 
 No telemetry. No bundled Apple fonts. No separate runtime download.
+
+Game Mode is available in the tray menu. A blue dot means it is enabled.
+
+WHY WINDOWS ASKS FOR UAC APPROVAL
+Approve the Windows administrator prompt so corner can install its component
+in Program Files and configure a local trusted code-signing certificate.
+This lets the corners stay visible above Start and the taskbar. Setup handles
+the configuration automatically. UIAccess expands access to other apps' UI;
+its use here is experimental. The private key stays on this PC. Uninstallation
+removes the protected component and its local certificate and key.

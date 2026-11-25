@@ -10,6 +10,7 @@
 #include <dwmapi.h>
 #include <shellapi.h>
 #include <shobjidl.h>
+#include <shlobj.h>
 #include <servprov.h>
 #include <string>
 #include <vector>
@@ -30,7 +31,7 @@ static void openSettings();
 static HICON brandIcon();
 static UINT showTrayPopup(HWND owner);
 
-// No animation loop, polling timer, keyboard hook, service, or managed runtime.
+// No animation loop or idle polling. Short, bounded retries settle shell/game transitions.
 struct Panel { std::wstring device, path, name; RECT rect{}; bool internal=false; };
 struct Mask { int w=0,h=0; std::vector<BYTE> alpha; };
 struct State {
@@ -43,6 +44,9 @@ struct State {
     DWORD up=0,down=0,startup=1,theme=0;
     DWORD preview=0;
     DWORD hideFullscreen=0;
+    DWORD game=0;
+    DWORD gameGuard=0;
+    DWORD uiAccess=0;
 };
 static State* state=nullptr;
 static HWND controller=nullptr, corners[4]{};
@@ -50,6 +54,7 @@ static int cornerCount=2;
 static Panel selected;
 static Mask masks[4];
 static bool debugMode=false, demo=false, rounded=false, allowExternal=false, noPin=false, panelPresent=false;
+static bool launchUIAccess=false;
 static int cornerSize=40;
 static DWORD parentPid=0;
 static std::wstring panelPath,leftFile,rightFile,report;
@@ -60,6 +65,10 @@ static UINT shellMessage=0,taskbarMessage=0;
 static constexpr UINT Refresh = WM_APP+1;
 static constexpr UINT ReloadSettings = WM_APP+2;
 static constexpr UINT TrayMessage = WM_APP+3;
+static constexpr UINT SettleLayers = WM_APP+4;
+static constexpr UINT_PTR LayerTimer = 1;
+static constexpr UINT_PTR GameTimer = 2;
+static int layerRetries=0;
 static NOTIFYICONDATAW tray{};
 static const wchar_t* appId=L"corner.Local.1";
 static std::wstring objectName(const wchar_t* suffix) {
@@ -172,11 +181,11 @@ static void rebuildRoundedMasks() {
 static void updateStateSettings() {
     state->cornerSize=rounded?cornerSize:0;state->enabled=settings.enabled;state->top=settings.top;state->bottom=settings.bottom;state->white=settings.white;
     state->up=settings.up;state->down=settings.down;state->startup=settings.startup;state->theme=settings.theme;
-    state->hideFullscreen=settings.hideFullscreen;
+    state->hideFullscreen=settings.hideFullscreen;state->game=settings.game;
 }
 static void applyLiveSettings(Settings incoming,bool preview) {
     normalize(incoming);
-    if(preview){incoming.startup=settings.startup;incoming.theme=settings.theme;}
+    if(preview){incoming.startup=settings.startup;incoming.theme=settings.theme;incoming.game=settings.game;}
     bool downChanged=incoming.down!=settings.down,upChanged=incoming.up!=settings.up;
     settings=incoming;
     if(rounded){
@@ -235,13 +244,15 @@ static bool isTaskbar(HWND w) {
     return !wcscmp(cls,L"Shell_TrayWnd")||!wcscmp(cls,L"Shell_SecondaryTrayWnd");
 }
 static bool shellCoversCorners() {
-    HWND foreground=GetForegroundWindow();bool protectFullscreen=!settings.hideFullscreen&&fullscreen(foreground);
     for(int i=0;i<cornerCount;i++) {
         HWND corner=corners[i];if(!corner||!IsWindowVisible(corner))continue;
         RECT bounds{};GetWindowRect(corner,&bounds);
         int limit=1024;
         for(HWND above=GetWindow(corner,GW_HWNDPREV);above&&limit--;above=GetWindow(above,GW_HWNDPREV)) {
-            if((!isTaskbar(above)&&!(protectFullscreen&&above==foreground))||!IsWindowVisible(above))continue;
+            DWORD pid=0;GetWindowThreadProcessId(above,&pid);
+            if(pid==GetCurrentProcessId()||!IsWindowVisible(above)||IsIconic(above))continue;
+            if(GetWindowLongPtrW(above,GWL_EXSTYLE)&WS_EX_TRANSPARENT)continue;
+            DWORD cloaked=0;DwmGetWindowAttribute(above,DWMWA_CLOAKED,&cloaked,sizeof(cloaked));if(cloaked)continue;
             RECT shell{},intersection{};GetWindowRect(above,&shell);
             if(IntersectRect(&intersection,&bounds,&shell))return true;
         }
@@ -249,7 +260,7 @@ static bool shellCoversCorners() {
     return false;
 }
 static void restoreLayerOrder() {
-    // A taskbar can promote itself without changing foreground or corner visibility.
+    // Start, taskbar flyouts and games can promote themselves independently.
     // Only raise on a real overlap above our windows; own reorders therefore settle.
     if(!shellCoversCorners())return;
     for(int i=0;i<cornerCount;i++)if(corners[i]&&IsWindowVisible(corners[i]))
@@ -259,8 +270,13 @@ static void restoreLayerOrder() {
 static void refresh(bool topology=false,bool redraw=false) {
     if(topology) {try{panelPresent=locate();}catch(...){panelPresent=false;}}
     if((topology||redraw)&&panelPresent){for(int i=0;i<cornerCount;i++)render(i);}
-    bool show=panelPresent&&settings.enabled&&(!settings.hideFullscreen||!fullscreen(GetForegroundWindow()));
+    bool show=panelPresent&&settings.enabled&&(settings.game||!settings.hideFullscreen||!fullscreen(GetForegroundWindow()));
     bool any=show&&(settings.bottom||(cornerCount>2&&settings.top));
+    bool gameGuard=any&&settings.game&&fullscreen(GetForegroundWindow());
+    if(gameGuard!=bool(state->gameGuard)) {
+        if(gameGuard)state->gameGuard=SetTimer(controller,GameTimer,250,nullptr)!=0;
+        else {KillTimer(controller,GameTimer);state->gameGuard=0;}
+    }
     if(any!=bool(state->visible)||topology||redraw) {
         for(int i=0;i<cornerCount;i++) if(HWND w=corners[i]) {
             if(show&&(i<2?settings.bottom:settings.top))SetWindowPos(w,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW);
@@ -274,13 +290,15 @@ static void CALLBACK eventHook(HWINEVENTHOOK,DWORD event,HWND w,LONG object,LONG
     if(event==EVENT_OBJECT_REORDER) {
         if(object!=OBJID_WINDOW||!state->visible||!shellCoversCorners())return;
     }else if(event==EVENT_OBJECT_SHOW) {
-        if(object!=OBJID_WINDOW||!isTaskbar(w))return;
+        if(object!=OBJID_WINDOW)return;
     }else if(event==EVENT_OBJECT_FOCUS) {
-        if(!isTaskbar(GetAncestor(w,GA_ROOT)))return;
+        if(w!=GetForegroundWindow()&&!isTaskbar(GetAncestor(w,GA_ROOT)))return;
     }else if(event==EVENT_OBJECT_LOCATIONCHANGE) {
         if(object!=OBJID_WINDOW||(w!=GetForegroundWindow()&&!isTaskbar(w)))return;
     }else if(event!=EVENT_SYSTEM_FOREGROUND&&event!=EVENT_SYSTEM_MOVESIZEEND&&event!=EVENT_SYSTEM_MINIMIZEEND)return;
     InterlockedIncrement(&state->events);PostMessageW(controller,Refresh,0,0);
+    if(event==EVENT_SYSTEM_FOREGROUND||event==EVENT_OBJECT_SHOW)
+        PostMessageW(controller,SettleLayers,0,0);
 }
 static LRESULT CALLBACK cornerProc(HWND w,UINT msg,WPARAM a,LPARAM b) {
     if(msg==WM_NCHITTEST)return HTTRANSPARENT;
@@ -314,10 +332,22 @@ static LRESULT CALLBACK controlProc(HWND w,UINT msg,WPARAM a,LPARAM b) {
                     if(saveSettings(settings))SendMessageW(w,ReloadSettings,0,0);
                 }
                 if(choice==3){HWND ui=FindWindowW(L"GlassCorners.Settings",nullptr);if(ui)PostMessageW(ui,WM_CLOSE,0,0);SetEvent(stopping);}
+                if(choice==4) {
+                    Settings changed=readSettings();changed.game=!changed.game;
+                    if(saveSettings(changed)){SendMessageW(w,ReloadSettings,0,0);PostMessageW(w,SettleLayers,0,0);}
+                    else MessageBoxW(w,L"Could not save Game mode.",L"corner",MB_OK|MB_ICONERROR);
+                }
             }
             return 0;
         }
         if(msg==Refresh){refresh();return 0;}
+        if(msg==SettleLayers){layerRetries=3;SetTimer(w,LayerTimer,120,nullptr);return 0;}
+        if(msg==WM_TIMER&&a==LayerTimer) {
+            KillTimer(w,LayerTimer);refresh();
+            if(--layerRetries>0)SetTimer(w,LayerTimer,120,nullptr);
+            return 0;
+        }
+        if(msg==WM_TIMER&&a==GameTimer){refresh();return 0;}
         if(msg==WM_SETTINGCHANGE){HICON old=tray.hIcon;tray.hIcon=brandIcon();Shell_NotifyIconW(NIM_MODIFY,&tray);if(old)DestroyIcon(old);return 0;}
         if(msg==WM_DISPLAYCHANGE||msg==WM_DPICHANGED){refresh(true);return 0;}
         if(msg==taskbarMessage){state->pin=0;Shell_NotifyIconW(NIM_ADD,&tray);refresh(true);return 0;}
@@ -357,8 +387,26 @@ static std::wstring cmdQuote(const std::wstring& s) {
     r.append(slash*2,L'\\');return r+L'"';
 }
 static bool spawn(const std::wstring& args,PROCESS_INFORMATION& pi) {
+#ifdef CORNER_UIACCESS
+    // Shell activation performs Windows' UIAccess signature/location checks.
+    // Keep the returned process handle for supervisor waits and crash recovery.
+    auto path=exePath();SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);
+    info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;info.lpVerb=L"open";
+    info.lpFile=path.c_str();info.lpParameters=args.c_str();info.nShow=SW_HIDE;
+    if(!ShellExecuteExW(&info)||!info.hProcess)return false;
+    pi={};pi.hProcess=info.hProcess;pi.dwProcessId=GetProcessId(info.hProcess);return true;
+#else
+    if(launchUIAccess) {
+        PWSTR folder=nullptr;if(FAILED(SHGetKnownFolderPath(FOLDERID_ProgramFiles,0,nullptr,&folder)))return false;
+        std::wstring path=std::wstring(folder)+L"\\corner\\corner.exe";CoTaskMemFree(folder);
+        SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;
+        info.lpVerb=L"open";info.lpFile=path.c_str();info.lpParameters=args.c_str();info.nShow=SW_HIDE;
+        if(!ShellExecuteExW(&info)||!info.hProcess)return false;
+        pi={};pi.hProcess=info.hProcess;pi.dwProcessId=GetProcessId(info.hProcess);return true;
+    }
     std::wstring command=cmdQuote(exePath())+L" "+args;STARTUPINFOW si{};si.cb=sizeof(si);
     return CreateProcessW(nullptr,command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&si,&pi);
+#endif
 }
 #include "settings_ui.h"
 #include "tray_ui.h"
@@ -374,13 +422,30 @@ static int run(int argc,wchar_t** argv) {
         else if(a==L"--parent")parentPid=std::stoul(value());
         else if(a==L"--rounded")rounded=true;else if(a==L"--radius")cornerSize=std::stoi(value());
         else if(a==L"--export-ui"){operation=a;captureDirectory=value();}
+        else if(a==L"--supervise-uiaccess"){operation=L"--supervise";launchUIAccess=true;}
         else if(a==L"--debug")debugMode=true;else if(a==L"--demo")demo=true;else if(a==L"--external")allowExternal=true;else if(a==L"--no-private-api")noPin=true;
-        else if(a==L"--list"||a==L"--status"||a==L"--stop"||a==L"--supervise"||a==L"--pin-helper"||a==L"--unpin-helper"||a==L"--self-test"||a==L"--validate"||a==L"--settings")operation=a;
+        else if(a==L"--list"||a==L"--status"||a==L"--stop"||a==L"--supervise"||a==L"--pin-helper"||a==L"--unpin-helper"||a==L"--self-test"||a==L"--validate"||a==L"--settings"||a==L"--menu")operation=a;
         else throw std::runtime_error("Unknown argument");
     }
     cornerCount=rounded?4:2;
+#ifndef CORNER_UIACCESS
+    auto ownPath=exePath();auto modeMarker=ownPath.substr(0,ownPath.find_last_of(L"\\/"))+L"\\.uiaccess-runtime";
+    bool enhancedInstalled=GetFileAttributesW(modeMarker.c_str())!=INVALID_FILE_ATTRIBUTES;
+    if(enhancedInstalled&&(operation==L"--settings"||operation==L"--status"||operation==L"--stop"||operation==L"--menu")) {
+        launchUIAccess=true;std::wstring args;
+        for(int i=1;i<argc;i++)args+=cmdQuote(argv[i])+L" ";
+        if(argc==1)args=L"--settings";
+        PROCESS_INFORMATION pi{};if(!spawn(args,pi))throw std::runtime_error("Cannot activate Enhanced mode. Run enhanced.ps1 Disable to return to ordinary mode.");
+        WaitForSingleObject(pi.hProcess,INFINITE);DWORD code=1;GetExitCodeProcess(pi.hProcess,&code);CloseHandle(pi.hProcess);return int(code);
+    }
+    if(enhancedInstalled&&operation==L"--supervise")launchUIAccess=true;
+#endif
     if(operation==L"--export-ui")return exportUI(captureDirectory);
     if(operation==L"--settings")return showSettings();
+    if(operation==L"--menu") {
+        HWND target=FindWindowW(L"GlassCorners.Control",L"GlassCorners controller");
+        return target&&PostMessageW(target,TrayMessage,0,WM_RBUTTONUP)?0:1;
+    }
     if(operation==L"--list") {
         std::string s="{\"physicalContourAvailable\":false,\"panels\":[";bool first=true;
         for(auto& p:panels()){if(!first)s+=',';first=false;s+=panelJSON(p);}output(s+"]}\n");return 0;
@@ -397,7 +462,7 @@ static int run(int argc,wchar_t** argv) {
           ",\"events\":"+std::to_string(s.events)+",\"renders\":"+std::to_string(s.renders)+",\"visibilityChanges\":"+std::to_string(s.changes)+
           ",\"approximateRounded\":"+std::to_string(s.rounded)+",\"cornerSize\":"+std::to_string(s.cornerSize)+",\"corners\":"+std::to_string(s.rounded?4:2)+
           ",\"enabled\":"+std::to_string(s.enabled)+",\"topEnabled\":"+std::to_string(s.top)+",\"bottomEnabled\":"+std::to_string(s.bottom)+",\"color\":\""+(s.white?"white":"black")+"\",\"layerRepairs\":"+std::to_string(s.layerRepairs)+
-          ",\"upPercent\":"+std::to_string(s.up)+",\"downPercent\":"+std::to_string(s.down)+",\"startup\":"+std::to_string(s.startup)+",\"theme\":"+std::to_string(s.theme)+",\"preview\":"+std::to_string(s.preview)+",\"hideFullscreen\":"+std::to_string(s.hideFullscreen)+"}\n");return 0;
+          ",\"upPercent\":"+std::to_string(s.up)+",\"downPercent\":"+std::to_string(s.down)+",\"startup\":"+std::to_string(s.startup)+",\"theme\":"+std::to_string(s.theme)+",\"preview\":"+std::to_string(s.preview)+",\"hideFullscreen\":"+std::to_string(s.hideFullscreen)+",\"game\":"+std::to_string(s.game)+",\"gameGuard\":"+std::to_string(s.gameGuard)+",\"uiAccess\":"+std::to_string(s.uiAccess)+"}\n");return 0;
     }
     if(operation==L"--self-test") {
         Mask m{3,2,{0,17,255,128,42,0}};auto b=pixels(m,false),d=pixels(m,true);
@@ -405,11 +470,11 @@ static int run(int argc,wchar_t** argv) {
         if(cmdQuote(L"a b\\")!=L"\"a b\\\\\"")throw std::runtime_error("Command quoting failed");
         wchar_t tempDir[MAX_PATH]{},tempFile[MAX_PATH]{};
         if(!GetTempPathW(MAX_PATH,tempDir)||!GetTempFileNameW(tempDir,L"gct",0,tempFile))throw std::runtime_error("Cannot create settings test file");
-        settingsFileOverride=tempFile;Settings test;test.enabled=false;test.top=false;test.white=true;test.up=23;test.down=73;test.startup=false;test.hideFullscreen=true;test.theme=2;
+        settingsFileOverride=tempFile;Settings test;test.enabled=false;test.top=false;test.white=true;test.up=23;test.down=73;test.startup=false;test.hideFullscreen=true;test.game=true;test.theme=2;
         if(!saveSettings(test))throw std::runtime_error("Settings save failed");
         auto restored=readSettings();
         if(!sameSettings(restored,test))throw std::runtime_error("Settings roundtrip failed");
-        test.enabled=true;test.top=true;test.bottom=true;test.white=false;test.up=0;test.down=15;test.startup=true;test.hideFullscreen=false;test.theme=1;normalize(test);
+        test.enabled=true;test.top=true;test.bottom=true;test.white=false;test.up=0;test.down=15;test.startup=true;test.hideFullscreen=false;test.game=false;test.theme=1;normalize(test);
         if(!saveSettings(test))throw std::runtime_error("Second settings save failed");
         restored=readSettings();
         if(!sameSettings(restored,test)||restored.top||!restored.bottom)throw std::runtime_error("Settings replacement/zero-percent failed");
@@ -441,7 +506,7 @@ static int run(int argc,wchar_t** argv) {
         if(!mutex||GetLastError()==ERROR_ALREADY_EXISTS){if(mutex)CloseHandle(mutex);return 0;}
         HANDLE stop=CreateEventW(nullptr,TRUE,FALSE,objectName(L"Stop").c_str());if(!stop)return 1;ResetEvent(stop);
         std::wstring args;
-        for(int i=1;i<argc;i++){if(!wcscmp(argv[i],L"--supervise"))continue;args+=cmdQuote(argv[i])+L" ";}
+        for(int i=1;i<argc;i++){if(!wcscmp(argv[i],L"--supervise")||!wcscmp(argv[i],L"--supervise-uiaccess"))continue;args+=cmdQuote(argv[i])+L" ";}
         if(argc==1)args=L"--rounded --external ";
         args+=L"--parent "+std::to_wstring(GetCurrentProcessId());
         // Wait on the child process object, not a periodic health check.
@@ -468,6 +533,10 @@ static int run(int argc,wchar_t** argv) {
     if(!mapping)throw std::runtime_error("Cannot create status mapping");
     state=static_cast<State*>(MapViewOfFile(mapping,FILE_MAP_WRITE,0,0,sizeof(State)));if(!state)throw std::runtime_error("Cannot map status");
     *state=State{};state->pid=GetCurrentProcessId();state->supervisor=parentPid;state->debug=debugMode;
+    HANDLE processToken=nullptr;DWORD tokenSize=0;
+    if(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&processToken)) {
+        GetTokenInformation(processToken,TokenUIAccess,&state->uiAccess,sizeof(state->uiAccess),&tokenSize);CloseHandle(processToken);
+    }
     state->rounded=rounded;updateStateSettings();
     SetCurrentProcessExplicitAppUserModelID(appId);
     WNDCLASSW wc{};wc.lpfnWndProc=controlProc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"GlassCorners.Control";

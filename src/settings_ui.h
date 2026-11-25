@@ -139,7 +139,7 @@ namespace CornerUI {
         if(preview&&effectChanged)previewDraft();
     }
     static bool commit() {
-        normalize(draft);Settings before=readSettings();bool startupBefore=startupEnabled();
+        normalize(draft);Settings before=readSettings();draft.game=before.game;bool startupBefore=startupEnabled();
         if(draft.startup!=startupBefore) {
             HRESULT hr=setStartup(draft.startup);
             if(FAILED(hr)){MessageBoxW(window,L"Could not change Start Windows. Your changes have not been applied.",L"corner",MB_OK|MB_ICONERROR);return false;}

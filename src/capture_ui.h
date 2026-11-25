@@ -34,7 +34,21 @@ static int exportUI(const std::wstring& directory) {
     saveWindowPNG(window,directory+L"\\settings-light.png",&CornerUI::edgeAlpha);
     sample.theme=2;CornerUI::draft=CornerUI::applied=sample;CornerUI::updated();saveWindowPNG(window,directory+L"\\settings-dark.png",&CornerUI::edgeAlpha);
     DestroyWindow(window);if(CornerUI::logoIcon){DestroyIcon(CornerUI::logoIcon);CornerUI::logoIcon=nullptr;}if(CornerUI::faceBrush){DeleteObject(CornerUI::faceBrush);CornerUI::faceBrush=nullptr;}
-    DeleteFileW(temp);settingsFileOverride.clear();
+    // Export the same native tray controls used at runtime, without opening a
+    // modal popup or changing the user's saved Game preference.
+    Settings previous=settings;settings.game=true;settings.enabled=true;
+    WNDCLASSW trayClass{};trayClass.lpfnWndProc=CornerTray::proc;trayClass.hInstance=GetModuleHandleW(nullptr);trayClass.lpszClassName=L"corner.TrayMenu";RegisterClassW(&trayClass);
+    CornerTray::dpi=dpi;
+    for(bool dark:{false,true}) {
+        CornerTray::dark=dark;CornerTray::icon=themedIcon(dark,CornerTray::px(26));
+        int width=CornerTray::px(260),height=CornerTray::px(298);
+        HWND menu=CreateWindowExW(0,trayClass.lpszClassName,L"corner tray capture",WS_POPUP|WS_CLIPCHILDREN,0,0,width,height,nullptr,nullptr,trayClass.hInstance,nullptr);
+        if(!menu)throw std::runtime_error("Cannot create tray capture");
+        SetWindowRgn(menu,CreateRoundRectRgn(0,0,width+1,height+1,CornerTray::px(80),CornerTray::px(80)),FALSE);
+        CornerTray::createButtons(menu);saveWindowPNG(menu,directory+(dark?L"\\tray-game-dark.png":L"\\tray-game-light.png"));
+        DestroyWindow(menu);DestroyIcon(CornerTray::icon);CornerTray::icon=nullptr;
+    }
+    settings=previous;DeleteFileW(temp);settingsFileOverride.clear();
     output("{\"nativeUiCapture\":true,\"font\":"+quoted(uiFontFamily)+",\"antialiasedEdgePixels\":"+std::to_string(semitransparent)+"}\n");
     Gdiplus::GdiplusShutdown(token);return semitransparent?0:1;
 }

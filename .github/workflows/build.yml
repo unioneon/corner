@@ -21,6 +21,7 @@ jobs:
           $compilerDir=Join-Path '${{ steps.msys2.outputs.msys2-location }}' 'mingw64\bin'
           $env:PATH="$compilerDir;$env:PATH"
           .\build.ps1 -Compiler (Join-Path $compilerDir 'g++.exe')
+          .\build.ps1 -UIAccess -Compiler (Join-Path $compilerDir 'g++.exe')
       - name: Test native core and UI export
         shell: pwsh
         run: .\tests\smoke.ps1

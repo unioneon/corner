@@ -9,6 +9,12 @@ struct StartupString { BSTR value;explicit StartupString(const std::wstring& s):
 static HRESULT createStartupTask(ITaskService* service,ITaskFolder* folder,BSTR name,IRegisteredTask** result) {
     ITaskDefinition* definition=nullptr;IPrincipal* principal=nullptr;ITaskSettings* options=nullptr;ITriggerCollection* triggers=nullptr;ITrigger* trigger=nullptr;ILogonTrigger* logon=nullptr;IActionCollection* actions=nullptr;IAction* action=nullptr;IExecAction* exec=nullptr;
     std::wstring fullName=startupTaskName();std::wstring sid=fullName.substr(7);StartupString user(sid),path(exePath()),arguments(L"--supervise --rounded --external"),working(exePath().substr(0,exePath().find_last_of(L"\\/"))),zero(L"PT0S"),minute(L"PT1M");
+#ifdef CORNER_UIACCESS
+    auto prefs=settingsPath();auto userFolder=prefs.substr(0,prefs.find_last_of(L"\\/"));
+    SysFreeString(path.value);path.value=SysAllocString((userFolder+L"\\corner.exe").c_str());
+    SysFreeString(working.value);working.value=SysAllocString(userFolder.c_str());
+    SysFreeString(arguments.value);arguments.value=SysAllocString(L"--supervise-uiaccess --rounded --external");
+#endif
     HRESULT hr=service->NewTask(0,&definition);
     if(SUCCEEDED(hr))hr=definition->get_Principal(&principal);
     if(SUCCEEDED(hr))hr=principal->put_UserId(user);
