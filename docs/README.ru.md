@@ -3,8 +3,8 @@
 **Плавные углы для рабочего стола Windows.** Верх и низ настраиваются отдельно,
 результат виден сразу, а после закрытия настроек утилита остаётся в трее.
 
-[Скачать установщик](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Setup-x64.exe) ·
-[Portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Portable-x64.zip) ·
+[Скачать установщик](https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Setup-x64.exe) ·
+[Portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Portable-x64.zip) ·
 [English](../README.md)
 
 ![corner в тёмной теме](images/settings-dark.png)

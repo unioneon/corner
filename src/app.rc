@@ -3,8 +3,8 @@
 101 ICON "../assets/corner-black.ico"
 102 ICON "../assets/corner-white.ico"
 1 VERSIONINFO
-FILEVERSION 1,2,1,0
-PRODUCTVERSION 1,2,1,0
+FILEVERSION 1,2,2,0
+PRODUCTVERSION 1,2,2,0
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -13,12 +13,12 @@ BEGIN
     BLOCK "040904b0"
     BEGIN
       VALUE "FileDescription", "corner\0"
-      VALUE "FileVersion", "1.2.1.0\0"
+      VALUE "FileVersion", "1.2.2.0\0"
       VALUE "CompanyName", "unioneon\0"
       VALUE "LegalCopyright", "Copyright (c) 2026 unioneon\0"
       VALUE "ProductName", "corner\0"
       VALUE "OriginalFilename", "corner.exe\0"
-      VALUE "ProductVersion", "1.2.1\0"
+      VALUE "ProductVersion", "1.2.2\0"
     END
   END
   BLOCK "VarFileInfo"

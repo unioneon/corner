@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
   &nbsp;
-  <a href="https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
 </p>
 
 <p align="center">
@@ -54,8 +54,8 @@ artwork based on those captures. [Artwork details](docs/design/POSTER.md).*
 
 ## Get started
 
-1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Setup-x64.exe),
-   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.1/corner-1.2.1-Portable-x64.zip)
+1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Setup-x64.exe),
+   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.2.2/corner-1.2.2-Portable-x64.zip)
    and run `corner.exe`.
 2. Click the tray icon and choose **Settings**. The desktop and Start menu
    shortcuts open the same window.

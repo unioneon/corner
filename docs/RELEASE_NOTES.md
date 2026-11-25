@@ -1,4 +1,11 @@
-# corner 1.2.1
+# corner 1.2.2
+
+- Aligned the settings controls with the supplied SVG layout.
+- Corrected the lower row spacing, logo position and Start Windows alignment.
+- Kept slider tracks on a consistent vertical axis across Windows themes.
+- Window dimensions, linking strategy and saved preferences are unchanged.
+
+## corner 1.2.1
 
 - Corners now remain visible in browser fullscreen, including YouTube, by default.
 - Added **Fullscreen → Show corners / Hide corners** to the logo menu.

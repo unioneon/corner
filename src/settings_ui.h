@@ -123,7 +123,7 @@ namespace CornerUI {
         bool applyEnabled=dirty();if(bool(IsWindowEnabled(item(Apply)))!=applyEnabled)EnableWindow(item(Apply),applyEnabled);
         bool themeChanged=refreshTheme();
         auto invalidate=[](int id){InvalidateRect(item(id),nullptr,FALSE);};
-        auto percent=[](bool up){RECT r{px(402),px(up?23:65),px(467),px(up?59:101)};InvalidateRect(window,&r,FALSE);};
+        auto percent=[](bool up){RECT r{px(402),px(up?23:61),px(467),px(up?59:97)};InvalidateRect(window,&r,FALSE);};
         if(themeChanged&&backdropWindow)shape();
         if(!displayedValid||themeChanged) {
             InvalidateRect(window,nullptr,FALSE);
@@ -181,12 +181,12 @@ namespace CornerUI {
     }
     static void controls() {
         displayedValid=false;
-        add(L"BUTTON",L"corner: color and appearance",Logo,BS_OWNERDRAW,20,28,64,77);
+        add(L"BUTTON",L"corner: color and appearance",Logo,BS_OWNERDRAW,20,24,64,77);
         add(L"BUTTON",L"Up",Up,BS_OWNERDRAW,167,21,113,38);
-        add(L"BUTTON",L"Down",Down,BS_OWNERDRAW,167,63,117,38);
-        add(L"BUTTON",L"Start Windows",Startup,BS_OWNERDRAW,500,21,232,38);
+        add(L"BUTTON",L"Down",Down,BS_OWNERDRAW,167,59,117,38);
+        add(L"BUTTON",L"Start Windows",Startup,BS_OWNERDRAW,506,21,210,38);
         for(int i=0;i<2;i++) {
-            HWND slider=add(TRACKBAR_CLASSW,i?L"Down percentage":L"Up percentage",i?DownSlider:UpSlider,TBS_HORZ|TBS_NOTICKS|TBS_FIXEDLENGTH,284,i?71:29,112,29);
+            HWND slider=add(TRACKBAR_CLASSW,i?L"Down percentage":L"Up percentage",i?DownSlider:UpSlider,TBS_HORZ|TBS_NOTICKS|TBS_FIXEDLENGTH,284,i?65.0769f:27.0769f,112,29);
             SendMessageW(slider,TBM_SETRANGE,TRUE,MAKELONG(0,100));SendMessageW(slider,TBM_SETPAGESIZE,0,10);SendMessageW(slider,TBM_SETTHUMBLENGTH,px(11),0);
             SendMessageW(slider,TBM_SETPOS,TRUE,i?draft.down:draft.up);
         }
@@ -211,7 +211,8 @@ namespace CornerUI {
             bool chosen=id==Up?draft.top:(id==Down?draft.bottom:draft.startup);
             Gdiplus::SolidBrush outer(pale());g.FillEllipse(&outer,0.0f,5.5f,27.0f,27.0f);
             if(chosen){Gdiplus::SolidBrush inner(blue());g.FillEllipse(&inner,6.0f,11.5f,15.0f,15.0f);}
-            text(g,id==Up?L"Up":(id==Down?L"Down":L"Start Windows"),{40,-1,w-40,h},26,label());
+            float labelX=id==Startup?32.0f:43.0f;
+            text(g,id==Up?L"Up":(id==Down?L"Down":L"Start Windows"),{labelX,-1,w-labelX,h},id==Startup?22.0f:26.0f,label());
         }
     }
     static void drawButton(DRAWITEMSTRUCT* draw) {
@@ -220,8 +221,11 @@ namespace CornerUI {
     static LRESULT sliderDraw(NMCUSTOMDRAW* draw) {
         if(draw->dwDrawStage!=CDDS_PREPAINT)return CDRF_DODEFAULT;
         HWND slider=draw->hdr.hwndFrom;RECT channel{},thumb{};SendMessageW(slider,TBM_GETCHANNELRECT,0,reinterpret_cast<LPARAM>(&channel));SendMessageW(slider,TBM_GETTHUMBRECT,0,reinterpret_cast<LPARAM>(&thumb));
-        float y=(thumb.top+thumb.bottom)*0.5f,x=(thumb.left+thumb.right)*0.5f;
+        float x=(thumb.left+thumb.right)*0.5f;
         RECT bounds{};GetClientRect(slider,&bounds);HDC buffer=CreateCompatibleDC(draw->hdc);HBITMAP bitmap=CreateCompatibleBitmap(draw->hdc,bounds.right,bounds.bottom);
+        // Native trackbar thumb height depends on the Windows theme. Keep the
+        // painted track on the SVG axis instead of inheriting that offset.
+        float y=bounds.bottom*0.5f;
         if(!buffer||!bitmap){if(bitmap)DeleteObject(bitmap);if(buffer)DeleteDC(buffer);return CDRF_DODEFAULT;}
         HGDIOBJ old=SelectObject(buffer,bitmap);
         {
@@ -235,9 +239,9 @@ namespace CornerUI {
     }
     static void paintSurface(HDC target) {
         Gdiplus::Graphics g(target);g.Clear(face());g.ScaleTransform(factor(),factor());g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        Gdiplus::Pen divider(isDark()?Gdiplus::Color(255,62,62,65):Gdiplus::Color(255,230,230,230),1);g.DrawLine(&divider,479.5f,8.5f,479.5f,120.5f);
+        Gdiplus::Pen divider(isDark()?Gdiplus::Color(255,62,62,65):Gdiplus::Color(255,230,230,230),1);g.DrawLine(&divider,479.5f,8.0f,479.5f,120.0f);
         auto up=std::to_wstring(draft.up)+L"%",down=std::to_wstring(draft.down)+L"%";
-        text(g,up.c_str(),{402,23,65,36},19,label());text(g,down.c_str(),{402,65,65,36},19,label());
+        text(g,up.c_str(),{402,23,65,36},19,label());text(g,down.c_str(),{402,61,65,36},19,label());
     }
     static LRESULT CALLBACK proc(HWND w,UINT msg,WPARAM a,LPARAM b) {
         if(msg==WM_CREATE){window=w;dpi=GetDpiForWindow(w);draft=readSettings();if(settingsFileOverride.empty())draft.startup=startupEnabled();if(!draft.enabled){draft.top=false;draft.bottom=false;}applied=draft;controls();shape();return 0;}
