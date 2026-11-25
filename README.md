@@ -52,7 +52,11 @@ window and corner stays quietly in the system tray.
 
 ### Game Mode
 
-![Actual corner tray menu with Game Mode enabled](docs/images/tray-game-dark.png)
+<p align="center">
+  <img src="docs/images/tray-game-dark.png" alt="Dark corner tray menu with Game Mode enabled" width="48%">
+  &nbsp;
+  <img src="docs/images/tray-game-light.png" alt="Light corner tray menu with Game Mode enabled" width="48%">
+</p>
 
 *The settings images are captured from the compiled Win32 controls using
 Windows print messages. The cover is stylized, AI-assisted promotional
