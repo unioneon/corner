@@ -83,15 +83,15 @@ switch($Action) {
         if($Demo -and !$DebugMode){throw '-Demo requires -DebugMode.'}
         $topology=Invoke-Corner $sourceExe @('--list') -ReadJson
         $candidates=@($topology.panels|Where-Object {(!$Panel -and $_.internal) -or ($Panel -and $_.path -eq $Panel -and ($_.internal -or $AllowExternal))})
-        if($Rounded -and !$Panel -and $candidates.Count -ne 1){$candidates=@($topology.panels|Select-Object -First 1)}
-        if(!$Demo -and $candidates.Count -ne 1){throw 'No matching display. Nothing was installed.'}
+        if($Rounded -and !$Panel){$candidates=@($topology.panels)}
+        if(!$Demo -and (!$candidates.Count -or (!$Rounded -and $candidates.Count -ne 1))){throw 'No matching display. Nothing was installed.'}
         if(!$Demo -and !$Rounded) {
             if(!$LeftMask -or !$RightMask){throw 'Mask files are required.'}
             if($Width -ne $candidates[0].width -or $Height -ne $candidates[0].height){throw 'Mask resolution does not match.'}
             $LeftMask=(Resolve-Path -LiteralPath $LeftMask).Path;$RightMask=(Resolve-Path -LiteralPath $RightMask).Path
         }
         $validation=@('--validate')
-        if($Demo){$validation+=@('--debug','--demo')}elseif($Rounded){$validation+=@('--rounded','--radius',[string]$Radius,'--panel',$candidates[0].path)}else{
+        if($Demo){$validation+=@('--debug','--demo')}elseif($Rounded){$validation+=@('--rounded','--radius',[string]$Radius);if($Panel){$validation+=@('--panel',$Panel)}}else{
             $validation+=@('--left',$LeftMask,'--right',$RightMask,'--panel',$candidates[0].path,'--width',[string]$Width,'--height',[string]$Height)
         }
         if($AllowExternal){$validation+='--external'};Invoke-Corner $sourceExe $validation -ReadJson|Out-Null
@@ -118,7 +118,7 @@ switch($Action) {
             Copy-Item -LiteralPath $payload -Destination $payloadTarget -Force
         }
         $items=@('--supervise');if($DebugMode){$items+='--debug'}
-        if($Demo){$items+='--demo'}elseif($Rounded){$items+=@('--rounded','--radius',[string]$Radius,'--panel',$candidates[0].path)}else{
+        if($Demo){$items+='--demo'}elseif($Rounded){$items+=@('--rounded','--radius',[string]$Radius);if($Panel){$items+=@('--panel',$Panel)}}else{
             Copy-Item -LiteralPath $LeftMask -Destination (Join-Path $absolute 'left.png') -Force;Copy-Item -LiteralPath $RightMask -Destination (Join-Path $absolute 'right.png') -Force
             $items+=@('--left',(Join-Path $absolute 'left.png'),'--right',(Join-Path $absolute 'right.png'),'--panel',$candidates[0].path,'--width',[string]$Width,'--height',[string]$Height)
         }

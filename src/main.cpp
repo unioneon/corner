@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <commctrl.h>
+#include <utility>
 
 #include <taskschd.h>
 #include <sddl.h>
@@ -33,6 +34,7 @@ static UINT showTrayPopup(HWND owner);
 
 // No animation loop or idle polling. Short, bounded retries settle shell/game transitions.
 struct Panel { std::wstring device, path, name; RECT rect{}; bool internal=false; };
+#include "display_layout.h"
 struct Mask { int w=0,h=0; std::vector<BYTE> alpha; };
 struct State {
     DWORD version=1, pid=0, supervisor=0, capture=0, debug=0, visible=0;
@@ -47,13 +49,27 @@ struct State {
     DWORD game=0;
     DWORD gameGuard=0;
     DWORD uiAccess=0;
+    DWORD monitorCount=0,visibleCorners=0;
 };
 static State* state=nullptr;
-static HWND controller=nullptr, corners[4]{};
+static HWND controller=nullptr;
 static int cornerCount=2;
-static Panel selected;
+struct DisplayCorners {
+    Panel panel;
+    HWND windows[4]{};
+    bool shown[4]{};
+    DisplayCorners()=default;
+    DisplayCorners(const DisplayCorners&)=delete;
+    DisplayCorners& operator=(const DisplayCorners&)=delete;
+    DisplayCorners(DisplayCorners&& other)noexcept:panel(std::move(other.panel)) {
+        for(int i=0;i<4;i++){windows[i]=std::exchange(other.windows[i],nullptr);shown[i]=other.shown[i];}
+    }
+    ~DisplayCorners(){for(HWND window:windows)if(window)DestroyWindow(window);}
+};
+static std::vector<Panel> targets;
+static std::vector<DisplayCorners> displays;
 static Mask masks[4];
-static bool debugMode=false, demo=false, rounded=false, allowExternal=false, noPin=false, panelPresent=false;
+static bool debugMode=false, demo=false, rounded=false, allowExternal=false, noPin=false;
 static bool launchUIAccess=false;
 static int cornerSize=40;
 static DWORD parentPid=0;
@@ -68,7 +84,9 @@ static constexpr UINT TrayMessage = WM_APP+3;
 static constexpr UINT SettleLayers = WM_APP+4;
 static constexpr UINT_PTR LayerTimer = 1;
 static constexpr UINT_PTR GameTimer = 2;
+static constexpr UINT_PTR TopologyTimer = 3;
 static int layerRetries=0;
+static int topologyChecks=0;
 static NOTIFYICONDATAW tray{};
 static const wchar_t* appId=L"corner.Local.1";
 static std::wstring objectName(const wchar_t* suffix) {
@@ -203,28 +221,20 @@ static std::vector<DWORD> pixels(const Mask& m,bool bright,bool flip=true) {
         p[y*m.w+x]=(a<<24)|(bright?((a<<16)|a):(settings.white?((a<<16)|(a<<8)|a):0));
     }return p;
 }
-static bool fullscreen(HWND w) {
+static bool fullscreenBounds(HWND w,RECT& r) {
     if(!w||!IsWindowVisible(w)||IsIconic(w))return false;
     wchar_t cls[128]{};GetClassNameW(w,cls,128);
     if(!wcscmp(cls,L"Progman")||!wcscmp(cls,L"WorkerW")||!wcscmp(cls,L"Shell_TrayWnd"))return false;
     DWORD pid=0;GetWindowThreadProcessId(w,&pid);if(pid==GetCurrentProcessId())return false;
     // Maximized ordinary windows keep captions; do not call these fullscreen.
     if((GetWindowLongPtrW(w,GWL_STYLE)&WS_CAPTION)==WS_CAPTION)return false;
-    RECT r{};
-    if(FAILED(DwmGetWindowAttribute(w,DWMWA_EXTENDED_FRAME_BOUNDS,&r,sizeof(r)))&&!GetWindowRect(w,&r))return false;
-    const auto& s=selected.rect;
-    return r.left<=s.left&&r.top<=s.top&&r.right>=s.right&&r.bottom>=s.bottom;
+    return SUCCEEDED(DwmGetWindowAttribute(w,DWMWA_EXTENDED_FRAME_BOUNDS,&r,sizeof(r)))||GetWindowRect(w,&r);
 }
 static bool locate() {
-    auto list=panels();std::vector<Panel> candidates;
-    for(auto& p:list) if((panelPath.empty()?p.internal:p.path==panelPath)&&(p.internal||allowExternal))candidates.push_back(p);
-    if((demo||(rounded&&allowExternal))&&panelPath.empty()&&candidates.empty()&&!list.empty())candidates.push_back(list.front());
-    if(candidates.size()!=1)return false;
-    selected=candidates.front();
-    if(!demo&&!rounded&&(selected.rect.right-selected.rect.left!=expectedW||selected.rect.bottom-selected.rect.top!=expectedH))return false;
-    return true;
+    targets=choosePanels(panels(),rounded,demo,allowExternal,panelPath,expectedW,expectedH);
+    return !targets.empty();
 }
-static void render(int side) {
+static void render(DisplayCorners& display,int side) {
     const auto& m=masks[side];auto p=pixels(m,debugMode,side<2);
     BITMAPINFO bi{};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=m.w;bi.bmiHeader.biHeight=-m.h;
     bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;bi.bmiHeader.biCompression=BI_RGB;
@@ -232,9 +242,9 @@ static void render(int side) {
     HBITMAP bitmap=CreateDIBSection(dc,&bi,DIB_RGB_COLORS,&data,nullptr,0);
     if(!dc||!bitmap||!data){if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);throw std::runtime_error("Cannot allocate corner bitmap");}
     CopyMemory(data,p.data(),p.size()*sizeof(DWORD));auto old=SelectObject(dc,bitmap);
-    POINT dst{side%2?selected.rect.right-m.w:selected.rect.left,side<2?selected.rect.bottom-m.h:selected.rect.top},src{};
+    POINT dst=cornerOrigin(display.panel.rect,side,m.w,m.h),src{};
     SIZE size{m.w,m.h};BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-    BOOL ok=UpdateLayeredWindow(corners[side],nullptr,&dst,&size,dc,&src,0,&blend,ULW_ALPHA);
+    BOOL ok=UpdateLayeredWindow(display.windows[side],nullptr,&dst,&size,dc,&src,0,&blend,ULW_ALPHA);
     SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);
     if(!ok)throw std::runtime_error("UpdateLayeredWindow failed");
     InterlockedIncrement(&state->renders);
@@ -244,8 +254,8 @@ static bool isTaskbar(HWND w) {
     return !wcscmp(cls,L"Shell_TrayWnd")||!wcscmp(cls,L"Shell_SecondaryTrayWnd");
 }
 static bool shellCoversCorners() {
-    for(int i=0;i<cornerCount;i++) {
-        HWND corner=corners[i];if(!corner||!IsWindowVisible(corner))continue;
+    for(const auto& display:displays)for(int i=0;i<cornerCount;i++) {
+        HWND corner=display.windows[i];if(!corner||!IsWindowVisible(corner))continue;
         RECT bounds{};GetWindowRect(corner,&bounds);
         int limit=1024;
         for(HWND above=GetWindow(corner,GW_HWNDPREV);above&&limit--;above=GetWindow(above,GW_HWNDPREV)) {
@@ -263,28 +273,62 @@ static void restoreLayerOrder() {
     // Start, taskbar flyouts and games can promote themselves independently.
     // Only raise on a real overlap above our windows; own reorders therefore settle.
     if(!shellCoversCorners())return;
-    for(int i=0;i<cornerCount;i++)if(corners[i]&&IsWindowVisible(corners[i]))
-        SetWindowPos(corners[i],HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOOWNERZORDER);
+    for(const auto& display:displays)for(int i=0;i<cornerCount;i++)if(display.windows[i]&&IsWindowVisible(display.windows[i]))
+        SetWindowPos(display.windows[i],HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_NOOWNERZORDER);
     InterlockedIncrement(&state->layerRepairs);
 }
+static LRESULT CALLBACK cornerProc(HWND,UINT,WPARAM,LPARAM);
+static std::vector<DisplayCorners> createDisplays(const std::vector<Panel>& selectedPanels) {
+    std::vector<DisplayCorners> result;result.reserve(selectedPanels.size());
+    const wchar_t* titles[]={L"GlassCorners bottom left",L"GlassCorners bottom right",L"GlassCorners top left",L"GlassCorners top right"};
+    for(const auto& panel:selectedPanels) {
+        result.emplace_back();auto& display=result.back();display.panel=panel;
+        for(int side=0;side<cornerCount;side++) {
+            HWND window=CreateWindowExW(WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST,
+                L"GlassCorners.Corner",titles[side],WS_POPUP,0,0,masks[side].w,masks[side].h,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+            display.windows[side]=window;if(!window)throw std::runtime_error("Cannot create display corner window");
+            DWORD affinity=0,expected=debugMode?0:0x11;
+            if(!SetWindowDisplayAffinity(window,expected)||!GetWindowDisplayAffinity(window,&affinity)||affinity!=expected)
+                throw std::runtime_error("Capture exclusion unavailable on a display; no new production corners shown");
+            render(display,side);
+        }
+    }
+    return result;
+}
 static void refresh(bool topology=false,bool redraw=false) {
-    if(topology) {try{panelPresent=locate();}catch(...){panelPresent=false;}}
-    if((topology||redraw)&&panelPresent){for(int i=0;i<cornerCount;i++)render(i);}
-    bool show=panelPresent&&settings.enabled&&(settings.game||!settings.hideFullscreen||!fullscreen(GetForegroundWindow()));
-    bool any=show&&(settings.bottom||(cornerCount>2&&settings.top));
-    bool gameGuard=any&&settings.game&&fullscreen(GetForegroundWindow());
-    if(gameGuard!=bool(state->gameGuard)) {
-        if(gameGuard)state->gameGuard=SetTimer(controller,GameTimer,250,nullptr)!=0;
+    if(topology) {
+        try {
+            locate();bool same=targets.size()==displays.size();
+            if(same)for(size_t i=0;i<targets.size();i++)
+                if(targets[i].path!=displays[i].panel.path||targets[i].device!=displays[i].panel.device||!sameRect(targets[i].rect,displays[i].panel.rect)){same=false;break;}
+            if(!same){auto replacement=createDisplays(targets);displays.swap(replacement);}
+        }catch(...){displays.clear();state->monitorCount=0;state->capture=0;throw;}
+        state->monitorCount=DWORD(displays.size());state->capture=!debugMode&&!displays.empty();
+    } else if(redraw)for(auto& display:displays)for(int side=0;side<cornerCount;side++)render(display,side);
+    RECT bounds{};bool hasFullscreen=fullscreenBounds(GetForegroundWindow(),bounds);
+    DWORD visible=0;bool guard=false,changed=false;
+    for(auto& display:displays) {
+        bool full=hasFullscreen&&coversDisplay(bounds,display.panel.rect);
+        bool show=showDisplayCorners(settings,full);
+        bool anyPair=settings.bottom||(cornerCount>2&&settings.top);
+        guard|=show&&anyPair&&settings.game&&full;
+        for(int side=0;side<cornerCount;side++) {
+            bool want=show&&(side<2?settings.bottom:settings.top);
+            if(want!=display.shown[side]||topology||redraw) {
+                if(want)SetWindowPos(display.windows[side],HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW);
+                else ShowWindow(display.windows[side],SW_HIDE);
+                display.shown[side]=want;changed=true;
+            }
+            if(want)visible++;
+        }
+    }
+    if(guard!=bool(state->gameGuard)) {
+        if(guard)state->gameGuard=SetTimer(controller,GameTimer,250,nullptr)!=0;
         else {KillTimer(controller,GameTimer);state->gameGuard=0;}
     }
-    if(any!=bool(state->visible)||topology||redraw) {
-        for(int i=0;i<cornerCount;i++) if(HWND w=corners[i]) {
-            if(show&&(i<2?settings.bottom:settings.top))SetWindowPos(w,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW);
-            else ShowWindow(w,SW_HIDE);
-        }
-        state->visible=any;InterlockedIncrement(&state->changes);
-    }
-    if(any)restoreLayerOrder();
+    state->visible=visible!=0;state->visibleCorners=visible;
+    if(changed)InterlockedIncrement(&state->changes);
+    if(visible)restoreLayerOrder();
 }
 static void CALLBACK eventHook(HWINEVENTHOOK,DWORD event,HWND w,LONG object,LONG,DWORD,DWORD) {
     if(event==EVENT_OBJECT_REORDER) {
@@ -349,11 +393,15 @@ static LRESULT CALLBACK controlProc(HWND w,UINT msg,WPARAM a,LPARAM b) {
         }
         if(msg==WM_TIMER&&a==GameTimer){refresh();return 0;}
         if(msg==WM_SETTINGCHANGE){HICON old=tray.hIcon;tray.hIcon=brandIcon();Shell_NotifyIconW(NIM_MODIFY,&tray);if(old)DestroyIcon(old);return 0;}
-        if(msg==WM_DISPLAYCHANGE||msg==WM_DPICHANGED){refresh(true);return 0;}
+        if(msg==WM_DISPLAYCHANGE||msg==WM_DPICHANGED){topologyChecks=2;SetTimer(w,TopologyTimer,200,nullptr);refresh(true);return 0;}
+        if(msg==WM_TIMER&&a==TopologyTimer) {
+            KillTimer(w,TopologyTimer);if(--topologyChecks>0)SetTimer(w,TopologyTimer,400,nullptr);
+            refresh(true);return 0;
+        }
         if(msg==taskbarMessage){state->pin=0;Shell_NotifyIconW(NIM_ADD,&tray);refresh(true);return 0;}
         if(msg==shellMessage){if((a&0x7fff)==HSHELL_WINDOWACTIVATED||(a&0x7fff)==HSHELL_WINDOWDESTROYED)refresh();return 0;}
         if(msg==WM_CLOSE){SetEvent(stopping);return 0;}
-    }catch(...){for(HWND c:corners)if(c)ShowWindow(c,SW_HIDE);state->visible=0;}
+    }catch(...){for(auto& display:displays)for(int side=0;side<cornerCount;side++){if(display.windows[side])ShowWindow(display.windows[side],SW_HIDE);display.shown[side]=false;}state->visible=0;state->visibleCorners=0;}
     return DefWindowProcW(w,msg,a,b);
 }
 
@@ -412,6 +460,7 @@ static bool spawn(const std::wstring& args,PROCESS_INFORMATION& pi) {
 #include "settings_ui.h"
 #include "tray_ui.h"
 #include "capture_ui.h"
+#include "display_tests.h"
 static int run(int argc,wchar_t** argv) {
     std::wstring operation;
     std::wstring captureDirectory;
@@ -461,7 +510,7 @@ static int run(int argc,wchar_t** argv) {
         output("{\"running\":true,\"pid\":"+std::to_string(s.pid)+",\"supervisor\":"+std::to_string(s.supervisor)+",\"debug\":"+std::to_string(s.debug)+
           ",\"visible\":"+std::to_string(s.visible)+",\"captureExcluded\":"+std::to_string(s.capture)+",\"pinApiAccepted\":"+std::to_string(s.pin)+
           ",\"events\":"+std::to_string(s.events)+",\"renders\":"+std::to_string(s.renders)+",\"visibilityChanges\":"+std::to_string(s.changes)+
-          ",\"approximateRounded\":"+std::to_string(s.rounded)+",\"cornerSize\":"+std::to_string(s.cornerSize)+",\"corners\":"+std::to_string(s.rounded?4:2)+
+          ",\"approximateRounded\":"+std::to_string(s.rounded)+",\"cornerSize\":"+std::to_string(s.cornerSize)+",\"corners\":"+std::to_string(s.monitorCount*(s.rounded?4:2))+",\"monitors\":"+std::to_string(s.monitorCount)+",\"visibleCorners\":"+std::to_string(s.visibleCorners)+
           ",\"enabled\":"+std::to_string(s.enabled)+",\"topEnabled\":"+std::to_string(s.top)+",\"bottomEnabled\":"+std::to_string(s.bottom)+",\"color\":\""+(s.white?"white":"black")+"\",\"layerRepairs\":"+std::to_string(s.layerRepairs)+
           ",\"upPercent\":"+std::to_string(s.up)+",\"downPercent\":"+std::to_string(s.down)+",\"startup\":"+std::to_string(s.startup)+",\"theme\":"+std::to_string(s.theme)+",\"preview\":"+std::to_string(s.preview)+",\"hideFullscreen\":"+std::to_string(s.hideFullscreen)+",\"game\":"+std::to_string(s.game)+",\"gameGuard\":"+std::to_string(s.gameGuard)+",\"uiAccess\":"+std::to_string(s.uiAccess)+"}\n");return 0;
     }
@@ -489,7 +538,8 @@ static int run(int argc,wchar_t** argv) {
         HDC fontDC=CreateCompatibleDC(nullptr);HFONT sf=CreateFontW(-24,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,uiFontFamily);
         HGDIOBJ oldFont=SelectObject(fontDC,sf);wchar_t family[128]{};GetTextFaceW(fontDC,128,family);SelectObject(fontDC,oldFont);DeleteObject(sf);DeleteDC(fontDC);
         if(_wcsicmp(family,uiFontFamily))throw std::runtime_error("UI font silently substituted");
-        output("{\"maskReflection\":\"pass\",\"alphaPreservation\":\"pass\",\"premultiplication\":\"pass\",\"whitePremultiplication\":\"pass\",\"commandQuoting\":\"pass\",\"settingsRoundtrip\":\"pass\",\"settingsReplacement\":\"pass\",\"zeroPercentDisables\":\"pass\",\"percentageMapping\":\"pass\",\"userIconResources\":\"pass\",\"fontSelection\":\"pass\",\"physicalContourMatch\":\"not_tested\"}\n");return 0;
+        testMultiMonitor();
+        output("{\"maskReflection\":\"pass\",\"alphaPreservation\":\"pass\",\"premultiplication\":\"pass\",\"whitePremultiplication\":\"pass\",\"commandQuoting\":\"pass\",\"settingsRoundtrip\":\"pass\",\"settingsReplacement\":\"pass\",\"zeroPercentDisables\":\"pass\",\"percentageMapping\":\"pass\",\"userIconResources\":\"pass\",\"fontSelection\":\"pass\",\"simulatedMultiMonitorLayout\":\"pass\",\"simulatedHotplug\":\"pass\",\"perMonitorFullscreenPolicy\":\"pass\",\"physicalMultiMonitorTest\":\"not_tested\",\"physicalContourMatch\":\"not_tested\"}\n");return 0;
     }
     settings=readSettings(cornerSize);if(rounded)cornerSize=settings.radius;
     if(demo&&!debugMode)throw std::runtime_error("Synthetic demo requires --debug; no guessed production contour is provided");
@@ -499,9 +549,12 @@ static int run(int argc,wchar_t** argv) {
     if(rounded&&!demo)rebuildRoundedMasks();
     else {masks[0]=demo?fixture(false):loadMask(leftFile);masks[1]=demo?fixture(true):loadMask(rightFile);masks[2]=masks[0];masks[3]=masks[1];}
     if(!demo&&!rounded&&(expectedW<1||expectedH<1))throw std::runtime_error("Exact mask mode requires --width and --height; no resampling is allowed");
-    if(!locate())throw std::runtime_error("No uniquely matching built-in panel at the mask resolution. Run --list. Use --debug --demo only for behavior tests");
+    if(!locate())throw std::runtime_error("No active matching display. Run --list to inspect the display topology");
     Gdiplus::GdiplusShutdown(token);
-    if(operation==L"--validate"){output("{\"valid\":true,\"demo\":"+std::string(demo?"true":"false")+",\"panel\":"+panelJSON(selected)+"}\n");return 0;}
+    if(operation==L"--validate") {
+        std::string list="[";for(const auto& panel:targets){if(list.size()>1)list+=",";list+=panelJSON(panel);}list+="]";
+        output("{\"valid\":true,\"demo\":"+std::string(demo?"true":"false")+",\"panel\":"+panelJSON(targets.front())+",\"monitors\":"+list+"}\n");return 0;
+    }
     if(operation==L"--supervise") {
         HANDLE mutex=CreateMutexW(nullptr,FALSE,objectName(L"Supervisor").c_str());
         if(!mutex||GetLastError()==ERROR_ALREADY_EXISTS){if(mutex)CloseHandle(mutex);return 0;}
@@ -547,18 +600,6 @@ static int run(int argc,wchar_t** argv) {
     shellMessage=RegisterWindowMessageW(L"SHELLHOOK");taskbarMessage=RegisterWindowMessageW(L"TaskbarCreated");RegisterShellHookWindow(controller);
     wc.lpfnWndProc=cornerProc;wc.lpszClassName=L"GlassCorners.Corner";
     if(!RegisterClassW(&wc))throw std::runtime_error("Cannot register corner class");
-    bool captureOK=true;
-    const wchar_t* titles[]={L"GlassCorners bottom left",L"GlassCorners bottom right",L"GlassCorners top left",L"GlassCorners top right"};
-    for(int i=0;i<cornerCount;i++) {
-        corners[i]=CreateWindowExW(WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST,wc.lpszClassName,
-            titles[i],WS_POPUP,0,0,masks[i].w,masks[i].h,nullptr,nullptr,wc.hInstance,nullptr);
-        if(!corners[i])throw std::runtime_error("Cannot create corner window");
-        DWORD affinity=0;
-        if(!SetWindowDisplayAffinity(corners[i],debugMode?0:0x11)||!GetWindowDisplayAffinity(corners[i],&affinity)||affinity!=(debugMode?0u:0x11u))captureOK=false;
-    }
-    state->capture=!debugMode&&captureOK;
-    // Do not silently expose production overlays if exclusion is unavailable.
-    if(!debugMode&&!captureOK)throw std::runtime_error("Capture exclusion unavailable; no production corners shown");
     std::vector<HWINEVENTHOOK> hooks;
     for(DWORD e:{DWORD(EVENT_SYSTEM_FOREGROUND),DWORD(EVENT_OBJECT_LOCATIONCHANGE),DWORD(EVENT_SYSTEM_MOVESIZEEND),DWORD(EVENT_SYSTEM_MINIMIZEEND),DWORD(EVENT_OBJECT_REORDER),DWORD(EVENT_OBJECT_SHOW),DWORD(EVENT_OBJECT_FOCUS)}) {
         HWINEVENTHOOK hook=SetWinEventHook(e,e,nullptr,eventHook,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);
@@ -593,7 +634,7 @@ static int run(int argc,wchar_t** argv) {
     if(previewOwner)CloseHandle(previewOwner);
     for(auto h:hooks)UnhookWinEvent(h);
     Shell_NotifyIconW(NIM_DELETE,&tray);DestroyIcon(tray.hIcon);
-    for(HWND c:corners)DestroyWindow(c);
+    displays.clear();
     DeregisterShellHookWindow(controller);DestroyWindow(controller);
     UnmapViewOfFile(state);CloseHandle(mapping);CloseHandle(stopping);CloseHandle(mutex);return 0;
 }

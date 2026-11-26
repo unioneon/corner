@@ -1,4 +1,27 @@
-# corner 1.3.1 — Smooth edges + subtle light-theme shadows
+# corner 1.4.0 preview — Multiple monitors
+
+This is a **prerelease for multi-monitor testing**. Automated layout and native
+window tests pass. Two physical displays were not available for hardware
+validation, so connection/disconnection, mixed-DPI hardware and game behavior
+on a real extended desktop still need confirmation.
+
+- Rounded mode creates a separate set of corners for every active logical display by default.
+- The installer no longer pins the default runtime to the first monitor.
+- Display changes rebuild the corner windows for the current layout; short, bounded checks allow the topology to settle, with no idle polling.
+- Supports negative desktop coordinates, vertically arranged displays and portrait monitors. Mirrored desktops are deduplicated.
+- Fullscreen hiding applies to the affected display; corners on the other screen stay visible. Game Mode continues to override fullscreen hiding.
+- The same Up/Down, color and Game preferences apply to all displays. Corner extents stay in physical pixels across DPI scales.
+- Advanced --panel selection is retained through protected-mode activation. Exact custom panel masks remain restricted to a single matching display.
+- Status now reports logical monitor count, total corners and visible corners.
+
+> [!IMPORTANT]
+> **Why approve UAC during installation?** Setup installs the protected component
+> and configures its machine-local code-signing certificate so corners stay
+> visible above Start and the taskbar. Setup handles this automatically. The
+> key stays on your PC; uninstall removes the component, certificate and key.
+> UIAccess broadens access to other applications' UI; its use here is experimental.
+
+## corner 1.3.1 — Smooth edges + subtle light-theme shadows
 
 - Fixed the settings window's alpha edge not appearing together with the native window. The edge now follows showing, hiding, moving and DPI changes.
 - Replaced the tray menu's binary rounded clipping with the same supersampled alpha frame used by Settings.

@@ -22,7 +22,7 @@
 
 ## Small controls. A visible difference.
 
-**corner adds smooth, click-through masks to the corners of one display.**
+**corner adds smooth, click-through masks to your display corners.**
 Adjust the upper and lower pairs independently, preview the result as you
 move a slider, and keep your preferred look with Apply. Close the settings
 window and corner stays quietly in the system tray.
@@ -39,6 +39,17 @@ window and corner stays quietly in the system tray.
 | **Capture-aware** | The masks request exclusion from supported Windows capture APIs. The settings window remains capturable. |
 | **Game Mode** | Click **Game** in the tray menu. A blue dot means enabled; click again to switch it off. Keeps corners enabled in fullscreen and strengthens overlay ordering while a fullscreen window is active. |
 | **Above Start** | Setup automatically configures a locally signed UIAccess renderer to keep corners above Start and the taskbar. Administrator approval is required during installation. |
+
+## Multi-monitor preview
+
+[Try the 1.4.0 preview](https://github.com/unioneon/corner/releases/tag/v1.4.0-beta.1)
+for corners on every active display, with automatic layout updates and
+fullscreen hiding per display. The same controls apply to all screens.
+
+**Hardware validation is pending:** synthetic layouts and real hidden-window
+checks pass, but two physical monitors were not available for testing.
+[What was tested and how to verify a two-screen setup](docs/MULTI-MONITOR.md).
+The main download buttons above continue to point to stable 1.3.1.
 
 ## Meet the interface
 
@@ -100,8 +111,7 @@ Microsoft reserves it for accessibility software, so its use here is experimenta
 ## A few practical details
 
 - **Requirements:** Windows 10 version 2004 or newer, or Windows 11; x64.
-- **One display:** installation prefers a built-in panel and otherwise selects
-  the first active display. Advanced users can pass `-Panel` to `manage.ps1 install`.
+- **Displays:** stable 1.3.1 targets one screen. The 1.4.0 preview targets all active logical displays by default; `-Panel` remains available for explicit single-display selection.
 - **Sizing:** 100% corresponds to a 256-pixel corner extent. Percentages are
   independent for the top and bottom, and are measured in physical pixels.
 - **Fullscreen:** corners remain visible in browser video and normal borderless

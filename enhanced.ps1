@@ -14,6 +14,14 @@ if($Action -eq 'Enable' -and !$Consent) {
 }
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $taskName='corner-'+$sid
+$previousArguments=(Get-ScheduledTask -TaskName $taskName).Actions[0].Arguments
+function Supervisor-Arguments([bool]$Enhanced) {
+    $mode=if($Enhanced){'--supervise-uiaccess'}else{'--supervise'}
+    if($previousArguments -match '^\s*"?--supervise(?:-uiaccess)?"?(?=\s|$)') {
+        return [regex]::Replace($previousArguments,'^\s*"?--supervise(?:-uiaccess)?"?(?=\s|$)',$mode)
+    }
+    return $mode+' --rounded --external'
+}
 $marker=Join-Path $InstallDir '.uiaccess-runtime'
 $wasEnhanced=Test-Path -LiteralPath $marker
 $manager=Join-Path $InstallDir 'manage.ps1'
@@ -33,15 +41,15 @@ try {
     if($Action -eq 'Enable'){Set-Content -LiteralPath $marker -Value 'corner-local-uiaccess-v1'}
     elseif(Test-Path -LiteralPath $marker){Remove-Item -LiteralPath $marker}
     $exe=Join-Path $InstallDir 'corner.exe'
-    $args=if($Action -eq 'Enable'){'--supervise-uiaccess --rounded --external'}else{'--supervise --rounded --external'}
-    Set-ScheduledTask -TaskName $taskName -Action (New-ScheduledTaskAction -Execute $exe -Argument $args -WorkingDirectory $InstallDir)|Out-Null
+    $taskArguments=Supervisor-Arguments ($Action -eq 'Enable')
+    Set-ScheduledTask -TaskName $taskName -Action (New-ScheduledTaskAction -Execute $exe -Argument $taskArguments -WorkingDirectory $InstallDir)|Out-Null
 } catch {
     # Keep the previous mode if elevation was cancelled or deployment failed.
     $protectedAvailable=Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'corner\corner.exe')
     if($wasEnhanced -and $protectedAvailable -and !(Test-Path -LiteralPath $marker)){Set-Content -LiteralPath $marker -Value 'corner-local-uiaccess-v1'}
     if(!$protectedAvailable) {
         if(Test-Path -LiteralPath $marker){Remove-Item -LiteralPath $marker}
-        Set-ScheduledTask -TaskName $taskName -Action (New-ScheduledTaskAction -Execute (Join-Path $InstallDir 'corner.exe') -Argument '--supervise --rounded --external' -WorkingDirectory $InstallDir)|Out-Null
+        Set-ScheduledTask -TaskName $taskName -Action (New-ScheduledTaskAction -Execute (Join-Path $InstallDir 'corner.exe') -Argument (Supervisor-Arguments $false) -WorkingDirectory $InstallDir)|Out-Null
     }
     & $manager restart -InstallDir $InstallDir
     Add-Type -AssemblyName PresentationFramework
