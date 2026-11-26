@@ -1,4 +1,4 @@
-# Multi-monitor preview validation
+# Multi-monitor validation
 
 Rounded mode covers all active logical displays. Each has four independent
 click-through windows, sharing the current Up/Down percentages, color, enabled
@@ -39,9 +39,14 @@ exercise application logic and real window placement, not a virtual display
 driver, physical hotplug, mixed-DPI hardware, game presentation or a recording
 pipeline spanning two monitors. No display driver is installed for testing.
 
-## Hardware confirmation still needed
+## Hardware feedback and manual checklist
 
-On a PC with two screens, install the preview, confirm its normal UAC prompt,
+The user reported successful operation on two physical monitors after testing
+the 1.4.0 preview. This confirms that setup; the remaining layout, DPI, game and
+recording combinations below are a broader manual checklist, not blanket claims
+of completed hardware testing.
+
+On a PC with two screens, install corner 1.4.0, confirm its normal UAC prompt,
 and check that status reports `monitors: 2`, `corners: 8` and (when enabled)
 `visibleCorners: 8` with both Up and Down enabled in Extend mode. Mirrored screens normally report one logical
 monitor. Move the secondary display to the left and above the primary in

@@ -1,9 +1,8 @@
-# corner 1.4.0 preview — Multiple monitors
+# corner 1.4.0 — Multiple monitors
 
-This is a **prerelease for multi-monitor testing**. Automated layout and native
-window tests pass. Two physical displays were not available for hardware
-validation, so connection/disconnection, mixed-DPI hardware and game behavior
-on a real extended desktop still need confirmation.
+**Stable release.** A user has confirmed that multi-monitor support works on a
+two-monitor setup. Automated layout and native window checks also pass. This
+does not imply that every monitor, DPI, driver or game combination was tested.
 
 - Rounded mode creates a separate set of corners for every active logical display by default.
 - The installer no longer pins the default runtime to the first monitor.

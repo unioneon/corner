@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/unioneon/corner/releases/download/v1.3.1/corner-1.3.1-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.4.0/corner-1.4.0-Setup-x64.exe"><img src="docs/images/download-setup.svg" alt="Download installer" height="50"></a>
   &nbsp;
-  <a href="https://github.com/unioneon/corner/releases/download/v1.3.1/corner-1.3.1-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
+  <a href="https://github.com/unioneon/corner/releases/download/v1.4.0/corner-1.4.0-Portable-x64.zip"><img src="docs/images/download-portable.svg" alt="Get portable ZIP" height="50"></a>
 </p>
 
 <p align="center">
@@ -40,16 +40,14 @@ window and corner stays quietly in the system tray.
 | **Game Mode** | Click **Game** in the tray menu. A blue dot means enabled; click again to switch it off. Keeps corners enabled in fullscreen and strengthens overlay ordering while a fullscreen window is active. |
 | **Above Start** | Setup automatically configures a locally signed UIAccess renderer to keep corners above Start and the taskbar. Administrator approval is required during installation. |
 
-## Multi-monitor preview
+## Multiple monitors
 
-[Try the 1.4.0 preview](https://github.com/unioneon/corner/releases/tag/v1.4.0-beta.1)
-for corners on every active display, with automatic layout updates and
-fullscreen hiding per display. The same controls apply to all screens.
+corner now rounds every active display by default, updates the layout when
+screens change, and handles fullscreen hiding independently for each display.
+The same Up/Down, color and Game controls apply to all screens.
 
-**Hardware validation is pending:** synthetic layouts and real hidden-window
-checks pass, but two physical monitors were not available for testing.
-[What was tested and how to verify a two-screen setup](docs/MULTI-MONITOR.md).
-The main download buttons above continue to point to stable 1.3.1.
+**Confirmed working on a two-monitor setup by a user.** Automated layout and
+native window tests also pass. [Validation details](docs/MULTI-MONITOR.md).
 
 ## Meet the interface
 
@@ -75,8 +73,8 @@ artwork based on those captures. [Artwork details](docs/design/POSTER.md).*
 
 ## Get started
 
-1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.3.1/corner-1.3.1-Setup-x64.exe),
-   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.3.1/corner-1.3.1-Portable-x64.zip)
+1. Install [corner Setup](https://github.com/unioneon/corner/releases/download/v1.4.0/corner-1.4.0-Setup-x64.exe),
+   or extract the complete [portable ZIP](https://github.com/unioneon/corner/releases/download/v1.4.0/corner-1.4.0-Portable-x64.zip)
    and run `corner.exe`.
    Approve Windows' UAC prompt; setup handles the configuration automatically.
 2. Click the tray icon and choose **Settings**. The desktop and Start menu
@@ -111,7 +109,7 @@ Microsoft reserves it for accessibility software, so its use here is experimenta
 ## A few practical details
 
 - **Requirements:** Windows 10 version 2004 or newer, or Windows 11; x64.
-- **Displays:** stable 1.3.1 targets one screen. The 1.4.0 preview targets all active logical displays by default; `-Panel` remains available for explicit single-display selection.
+- **Displays:** all active logical displays are covered by default. `-Panel` remains available for explicit single-display selection. Mirrored outputs share one logical set of corners.
 - **Sizing:** 100% corresponds to a 256-pixel corner extent. Percentages are
   independent for the top and bottom, and are measured in physical pixels.
 - **Fullscreen:** corners remain visible in browser video and normal borderless

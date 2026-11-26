@@ -1,9 +1,9 @@
 corner
 A softer edge to Windows.
 
-MULTI-MONITOR PREVIEW
-This preview creates corners on all active screens. Automated layout tests pass;
-testing on two physical displays is still pending.
+MULTIPLE MONITORS
+Corners appear on every active screen. Layout changes are detected automatically,
+and the same settings apply to all screens.
 
 Round the top, the bottom, or all four corners of your display.
 Preview changes instantly. Apply saves; OK closes and discards unsaved changes.
